@@ -4,6 +4,7 @@ import { UserRole } from '../models/types.js'
 export interface UserResponse {
   id: string
   name: string
+  email: string | null
   phoneNumber: string
   whatsappNumber: string | null
   role: UserRole
@@ -16,6 +17,7 @@ export interface UserResponse {
 export const toUserResponse = (user: User): UserResponse => ({
   id: user.id,
   name: user.name,
+  email: user.email,
   phoneNumber: user.phoneNumber,
   whatsappNumber: user.whatsappNumber,
   role: user.role,

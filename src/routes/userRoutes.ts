@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   deleteCurrentUser,
+  getCurrentUser,
   getAllUsers,
   updateCurrentUser,
 } from '../controllers/userController.js'
@@ -15,6 +16,7 @@ import {
 export const userRouter = Router()
 
 userRouter.use(authenticate)
+userRouter.get('/me', getCurrentUser)
 userRouter.patch('/me', validateBody(updateUserSchema), updateCurrentUser)
 userRouter.delete('/me', validateBody(deleteUserSchema), deleteCurrentUser)
 userRouter.get('/', authorizeRoles('admin'), validateQuery(userListQuerySchema), getAllUsers)

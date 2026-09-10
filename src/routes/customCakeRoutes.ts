@@ -6,7 +6,7 @@ import {
   listCustomCakeRequests,
   quoteCustomCakeRequest,
   rejectCustomCakeRequest,
-  sendCustomCakePaymentLink,
+  getCustomCakeWhatsAppOptions,
   uploadCustomCakeRequestImage,
 } from '../controllers/customCakeController.js'
 import { authenticate, authorizeRoles, optionalAuthenticate } from '../middleware/authMiddleware.js'
@@ -45,6 +45,12 @@ customCakeRouter.get(
   listCustomCakeRequests,
 )
 customCakeRouter.get('/:id', authenticate, authorizeRoles('admin'), getCustomCakeRequest)
+customCakeRouter.get(
+  '/:id/whatsapp-options',
+  authenticate,
+  authorizeRoles('admin'),
+  getCustomCakeWhatsAppOptions,
+)
 customCakeRouter.post(
   '/:id/quote',
   authenticate,
@@ -64,10 +70,4 @@ customCakeRouter.post(
   authenticate,
   authorizeRoles('admin'),
   cancelCustomCakeRequest,
-)
-customCakeRouter.post(
-  '/:id/send-payment-link',
-  authenticate,
-  authorizeRoles('admin'),
-  sendCustomCakePaymentLink,
 )

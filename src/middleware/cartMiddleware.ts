@@ -9,7 +9,7 @@ const GUEST_CART_DAYS = 30
 const guestCartCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
   path: '/',
 }
 

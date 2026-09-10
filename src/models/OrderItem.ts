@@ -19,6 +19,7 @@ export class OrderItem extends Model<
   declare productId: ForeignKey<Product['id']> | null
   declare productName: string
   declare productDescription: string | null
+  declare productImageUrl: string | null
   declare quantity: number
   declare unitPrice: string
   declare lineTotal: string
@@ -34,6 +35,7 @@ export const initOrderItem = (sequelize: Sequelize) => {
       productId: { type: DataTypes.UUID, allowNull: true },
       productName: { type: DataTypes.STRING(160), allowNull: false },
       productDescription: { type: DataTypes.TEXT, allowNull: true },
+      productImageUrl: { type: DataTypes.TEXT, allowNull: true, validate: { isUrl: true } },
       quantity: { type: DataTypes.INTEGER, allowNull: false, validate: { min: 1 } },
       unitPrice: {
         type: DataTypes.DECIMAL(12, 2),

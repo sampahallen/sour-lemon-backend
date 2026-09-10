@@ -83,6 +83,13 @@ starting the API. Phone numbers use E.164 format, such as `+233201234567`.
   The address requires `addressLine1` and `city`; `addressLine2` and `landmark`
   are optional. It is saved as the customer's default address.
 - `POST /api/auth/signin` - authenticate with `phoneNumber` and `password`.
+- `POST /api/auth/forgot-password` - accept a customer `phoneNumber` and send a
+  single-use reset link to the registered email. The response is intentionally
+  the same when no recoverable customer account exists.
+- `POST /api/auth/reset-password` - replace a customer's password with a valid
+  reset `token` and new `password`; all existing refresh sessions are revoked.
+- `GET /api/orders/mine?page=1&limit=12` - list the authenticated customer's
+  orders with current payment/status information and item previews.
 - `PATCH /api/users/me` - update the authenticated customer's contact data or
   password. Password changes require `currentPassword` and `newPassword`.
 - `DELETE /api/users/me` - soft-delete the authenticated account and its saved
@@ -92,6 +99,11 @@ starting the API. Phone numbers use E.164 format, such as `+233201234567`.
 Protected routes require `Authorization: Bearer <token>`. Sign-up never accepts
 an admin role; the initial administrator must be created through trusted seed or
 deployment tooling.
+
+Password recovery requires `CUSTOMER_APP_URL`, `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. Reset links expire
+after `PASSWORD_RESET_TOKEN_TTL_MINUTES`, which defaults to 30 minutes. Apply
+the password reset token migration before enabling the feature.
 
 ## Journal API
 

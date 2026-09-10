@@ -7,7 +7,7 @@ import {
   Model,
   Sequelize,
 } from 'sequelize'
-import { JsonObject } from './types.js'
+import { JsonValue } from './types.js'
 import { User } from './User.js'
 
 export class AppSetting extends Model<
@@ -15,7 +15,7 @@ export class AppSetting extends Model<
   InferCreationAttributes<AppSetting>
 > {
   declare key: string
-  declare value: JsonObject
+  declare value: JsonValue
   declare description: string | null
   declare updatedByUserId: ForeignKey<User['id']> | null
   declare isDeleted: CreationOptional<boolean>

@@ -5,6 +5,7 @@ export const CART_STATUSES = ['active', 'converted', 'abandoned'] as const
 export type CartStatus = (typeof CART_STATUSES)[number]
 
 export const ORDER_STATUSES = [
+  'received',
   'pending_payment',
   'confirmed',
   'preparing',
@@ -65,6 +66,7 @@ export interface DeliveryAddressSnapshot {
 }
 
 export type JsonObject = Record<string, unknown>
+export type JsonValue = string | number | boolean | null | JsonObject | JsonValue[]
 
 export interface JournalBody {
   version: 1

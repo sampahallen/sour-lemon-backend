@@ -11,6 +11,7 @@ import { USER_ROLES, UserRole } from './types.js'
 export class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
   declare id: CreationOptional<string>
   declare name: string
+  declare email: string | null
   declare phoneNumber: string
   declare passwordHash: string
   declare whatsappNumber: string | null
@@ -26,6 +27,7 @@ export const initUser = (sequelize: Sequelize) => {
     {
       id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
       name: { type: DataTypes.STRING(120), allowNull: false },
+      email: { type: DataTypes.STRING(254), allowNull: true, validate: { isEmail: true } },
       phoneNumber: { type: DataTypes.STRING(32), allowNull: false },
       passwordHash: { type: DataTypes.STRING(255), allowNull: false },
       whatsappNumber: { type: DataTypes.STRING(32), allowNull: true },

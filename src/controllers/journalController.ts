@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { Op } from 'sequelize'
 import { sequelize } from '../config/database.js'
 import { deleteJournalImageObject, uploadJournalImage } from '../config/storage.js'
@@ -7,7 +8,7 @@ import { JournalPostImage } from '../models/JournalPostImage.js'
 import { User } from '../models/User.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
-import { toSlug } from '../utils/slug.js'
+import { toDraftSlug, toSlug } from '../utils/slug.js'
 import {
   JournalAdminPostQuery,
   JournalCategoryCreateInput,
@@ -196,12 +197,14 @@ export const getAdminJournalPost = asyncHandler(async (request, response) => {
 export const createJournalPost = asyncHandler(async (request, response) => {
   const input = request.validatedBody as JournalPostCreateInput
   await requireCategory(input.categoryId)
+  const postId = randomUUID()
 
   const post = await JournalPost.create({
+    id: postId,
     categoryId: input.categoryId,
     authorUserId: request.auth!.userId,
     title: input.title,
-    slug: generatedSlug(input.slug, input.title),
+    slug: generatedSlug(input.slug, toDraftSlug(input.title, postId)),
     excerpt: input.excerpt ?? null,
     body: input.body ?? { version: 1, blocks: [] },
     status: 'draft',

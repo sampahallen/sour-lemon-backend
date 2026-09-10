@@ -3,6 +3,7 @@ import { CustomCakeImage } from '../models/CustomCakeImage.js'
 import { CustomCakeRequest } from '../models/CustomCakeRequest.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
+import { buildCustomCakeWhatsAppOptions } from '../services/whatsappComposerService.js'
 import type {
   CustomCakeQuery,
   CustomCakeQuoteInput,
@@ -145,14 +146,15 @@ export const cancelCustomCakeRequest = asyncHandler(async (request, response) =>
   response.json({ request: await customCakeRequestDetail(customCakeRequest) })
 })
 
-export const sendCustomCakePaymentLink = asyncHandler(async (request, response) => {
+export const getCustomCakeWhatsAppOptions = asyncHandler(async (request, response) => {
   const customCakeRequest = await requireCustomCakeRequest(request.params.id)
-  const paymentLink = `https://pay.sourlemon.example/checkout/${customCakeRequest.id}`
-  const message = `Hi ${customCakeRequest.customerName}! Your custom cake quote is ${customCakeRequest.currency} ${customCakeRequest.quotedAmount}. Pay here to confirm: ${paymentLink}`
-  const whatsappPhone = (customCakeRequest.whatsappNumber ?? customCakeRequest.phoneNumber).replace(
-    /\D/g,
-    '',
-  )
-  const whatsappLink = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`
-  response.json({ whatsappLink, message, paymentLink })
+  response.json(buildCustomCakeWhatsAppOptions({
+    customerName: customCakeRequest.customerName,
+    phoneNumber: customCakeRequest.phoneNumber,
+    whatsappNumber: customCakeRequest.whatsappNumber,
+    status: customCakeRequest.status,
+    occasion: customCakeRequest.occasion,
+    quotedAmount: customCakeRequest.quotedAmount,
+    currency: customCakeRequest.currency,
+  }))
 })

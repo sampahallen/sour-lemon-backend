@@ -18,10 +18,18 @@ import { AuthSession } from '../models/AuthSession.js'
 import { Cart } from '../models/Cart.js'
 import { CartItem } from '../models/CartItem.js'
 import { User } from '../models/User.js'
+import { PasswordResetToken } from '../models/PasswordResetToken.js'
+import { getPasswordResetTokenTtlMinutes } from '../config/email.js'
+import { sendPasswordResetEmail } from '../services/passwordResetEmailService.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 import { toUserResponse } from '../utils/userResponse.js'
-import { SignInInput, SignUpInput } from '../validators/authSchemas.js'
+import {
+  ForgotPasswordInput,
+  ResetPasswordInput,
+  SignInInput,
+  SignUpInput,
+} from '../validators/authSchemas.js'
 
 const createToken = (user: User) =>
   jwt.sign({ role: user.role }, getJwtSecret(), {
@@ -39,14 +47,14 @@ const authenticationResponse = (user: User) => ({
 const refreshCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
   path: '/api/auth',
 }
 
 const guestCartCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
   path: '/',
 }
 
@@ -57,6 +65,14 @@ const hashGuestToken = (token: string) =>
   createHash('sha256').update(token).digest('hex')
 
 const createRefreshToken = () => randomBytes(48).toString('base64url')
+
+const createPasswordResetToken = () => randomBytes(32).toString('base64url')
+
+const hashPasswordResetToken = (token: string) =>
+  createHash('sha256').update(token).digest('hex')
+
+const forgotPasswordMessage =
+  'If a customer account matches that phone number, a reset link will be sent to its registered email.'
 
 const setRefreshCookie = (response: Response, token: string, expiresAt: Date) => {
   response.cookie(getRefreshCookieName(), token, { ...refreshCookieOptions, expires: expiresAt })
@@ -172,6 +188,7 @@ export const signUp = asyncHandler(async (request, response) => {
     const createdUser = await User.create(
       {
         name: input.name,
+        email: input.email,
         phoneNumber: input.phoneNumber,
         passwordHash,
         whatsappNumber: input.whatsappNumber ?? null,
@@ -221,6 +238,100 @@ export const signIn = asyncHandler(async (request, response) => {
   setRefreshCookie(response, refreshSession.token, refreshSession.expiresAt)
   if (mergedGuestCart) clearGuestCartCookie(response)
   response.json(authenticationResponse(user))
+})
+
+export const forgotPassword = asyncHandler(async (request, response) => {
+  const input = request.validatedBody as ForgotPasswordInput
+  const user = await User.findOne({
+    where: {
+      phoneNumber: input.phoneNumber,
+      role: 'customer',
+      isActive: true,
+      isDeleted: false,
+    },
+  })
+
+  if (!user?.email) {
+    response.status(202).json({ message: forgotPasswordMessage })
+    return
+  }
+
+  const token = createPasswordResetToken()
+  const now = new Date()
+  const expiresInMinutes = getPasswordResetTokenTtlMinutes()
+  const expiresAt = new Date(now.getTime() + expiresInMinutes * 60 * 1000)
+  const resetToken = await sequelize.transaction(async (transaction) => {
+    await PasswordResetToken.update(
+      { usedAt: now },
+      { where: { userId: user.id, usedAt: null }, transaction },
+    )
+    return PasswordResetToken.create(
+      { userId: user.id, tokenHash: hashPasswordResetToken(token), expiresAt, usedAt: null },
+      { transaction },
+    )
+  })
+
+  void sendPasswordResetEmail({
+    email: user.email,
+    name: user.name,
+    token,
+    expiresInMinutes,
+  }).catch(async (error: unknown) => {
+    console.error('Failed to send a password reset email', error)
+    await resetToken.update({ usedAt: new Date() }).catch((updateError: unknown) => {
+      console.error('Failed to invalidate an undelivered password reset token', updateError)
+    })
+  })
+
+  response.status(202).json({ message: forgotPasswordMessage })
+})
+
+export const resetPassword = asyncHandler(async (request, response) => {
+  const input = request.validatedBody as ResetPasswordInput
+  const now = new Date()
+  const tokenHash = hashPasswordResetToken(input.token)
+  const passwordHash = await bcrypt.hash(input.password, getBcryptRounds())
+
+  await sequelize.transaction(async (transaction) => {
+    const resetToken = await PasswordResetToken.findOne({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: { [Op.gt]: now },
+      },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    })
+    if (!resetToken) {
+      throw new HttpError(400, 'This reset link is invalid or has expired')
+    }
+
+    const user = await User.findOne({
+      where: {
+        id: resetToken.userId,
+        role: 'customer',
+        isActive: true,
+        isDeleted: false,
+      },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    })
+    if (!user) {
+      throw new HttpError(400, 'This reset link is invalid or has expired')
+    }
+
+    await user.update({ passwordHash }, { transaction })
+    await PasswordResetToken.update(
+      { usedAt: now },
+      { where: { userId: user.id, usedAt: null }, transaction },
+    )
+    await AuthSession.update(
+      { revokedAt: now },
+      { where: { userId: user.id, revokedAt: null }, transaction },
+    )
+  })
+
+  response.status(204).send()
 })
 
 export const refresh = asyncHandler(async (request, response) => {

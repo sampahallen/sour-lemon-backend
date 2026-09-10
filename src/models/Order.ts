@@ -28,6 +28,7 @@ export class Order extends Model<InferAttributes<Order>, InferCreationAttributes
   declare paymentStatus: CreationOptional<PaymentStatus>
   declare fulfillmentType: FulfillmentType
   declare customerName: string
+  declare customerEmail: string | null
   declare phoneNumber: string
   declare whatsappNumber: string | null
   declare deliveryAddress: DeliveryAddressSnapshot | null
@@ -36,6 +37,7 @@ export class Order extends Model<InferAttributes<Order>, InferCreationAttributes
   declare total: string
   declare currency: CreationOptional<string>
   declare customerNotes: string | null
+  declare guestAccessTokenHash: string | null
   declare placedAt: Date | null
   declare confirmedAt: Date | null
   declare isDeleted: CreationOptional<boolean>
@@ -47,13 +49,13 @@ export const initOrder = (sequelize: Sequelize) => {
   Order.init(
     {
       id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-      orderNumber: { type: DataTypes.STRING(32), allowNull: false, unique: true },
+      orderNumber: { type: DataTypes.STRING(32), allowNull: false },
       userId: { type: DataTypes.UUID, allowNull: true },
       deliveryAreaId: { type: DataTypes.UUID, allowNull: true },
       status: {
         type: DataTypes.STRING(32),
         allowNull: false,
-        defaultValue: 'pending_payment',
+        defaultValue: 'received',
         validate: { isIn: [[...ORDER_STATUSES]] },
       },
       paymentStatus: {
@@ -68,6 +70,7 @@ export const initOrder = (sequelize: Sequelize) => {
         validate: { isIn: [[...FULFILLMENT_TYPES]] },
       },
       customerName: { type: DataTypes.STRING(120), allowNull: false },
+      customerEmail: { type: DataTypes.STRING(254), allowNull: true, validate: { isEmail: true } },
       phoneNumber: { type: DataTypes.STRING(32), allowNull: false },
       whatsappNumber: { type: DataTypes.STRING(32), allowNull: true },
       deliveryAddress: { type: DataTypes.JSONB, allowNull: true },
@@ -81,6 +84,7 @@ export const initOrder = (sequelize: Sequelize) => {
       total: { type: DataTypes.DECIMAL(12, 2), allowNull: false, validate: { min: 0 } },
       currency: { type: DataTypes.CHAR(3), allowNull: false, defaultValue: 'GHS' },
       customerNotes: { type: DataTypes.TEXT, allowNull: true },
+      guestAccessTokenHash: { type: DataTypes.STRING(64), allowNull: true },
       placedAt: { type: DataTypes.DATE, allowNull: true },
       confirmedAt: { type: DataTypes.DATE, allowNull: true },
       isDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
@@ -100,11 +104,11 @@ export const initOrder = (sequelize: Sequelize) => {
       ],
       validate: {
         fulfillmentDetails(this: Order) {
-          if (this.fulfillmentType === 'pickup' && this.deliveryAddress) {
-            throw new Error('Pickup orders cannot have a delivery address')
+          if (this.fulfillmentType !== 'sour_lemon_delivery' && this.deliveryAddress) {
+            throw new Error('Pickup and customer-rider orders cannot have a delivery address')
           }
-          if (this.fulfillmentType !== 'pickup' && !this.deliveryAddress) {
-            throw new Error('Delivery orders require a delivery address')
+          if (this.fulfillmentType === 'sour_lemon_delivery' && !this.deliveryAddress) {
+            throw new Error('Sour Lemon delivery orders require a delivery address')
           }
         },
         totalsMatch(this: Order) {

@@ -16,6 +16,7 @@ import { OrderItem, initOrderItem } from './OrderItem.js'
 import { OrderStatusHistory, initOrderStatusHistory } from './OrderStatusHistory.js'
 import { Payment, initPayment } from './Payment.js'
 import { PaymentEvent, initPaymentEvent } from './PaymentEvent.js'
+import { PasswordResetToken, initPasswordResetToken } from './PasswordResetToken.js'
 import { Product, initProduct } from './Product.js'
 import { ProductImage, initProductImage } from './ProductImage.js'
 import { SiteSection, initSiteSection } from './SiteSection.js'
@@ -28,6 +29,7 @@ export const initializeModels = (sequelize: Sequelize) => {
 
   initUser(sequelize)
   initAuthSession(sequelize)
+  initPasswordResetToken(sequelize)
   initDeliveryArea(sequelize)
   initAddress(sequelize)
   initSiteSection(sequelize)
@@ -63,6 +65,16 @@ export const initializeModels = (sequelize: Sequelize) => {
 
   User.hasMany(AuthSession, { as: 'authSessions', foreignKey: 'userId', onDelete: 'CASCADE' })
   AuthSession.belongsTo(User, { as: 'user', foreignKey: 'userId', onDelete: 'CASCADE' })
+  User.hasMany(PasswordResetToken, {
+    as: 'passwordResetTokens',
+    foreignKey: 'userId',
+    onDelete: 'CASCADE',
+  })
+  PasswordResetToken.belongsTo(User, {
+    as: 'user',
+    foreignKey: 'userId',
+    onDelete: 'CASCADE',
+  })
 
   SiteSection.hasMany(Category, {
     as: 'categories',
@@ -154,6 +166,16 @@ export const initializeModels = (sequelize: Sequelize) => {
 
   Order.hasMany(Payment, { as: 'payments', foreignKey: 'orderId', onDelete: 'RESTRICT' })
   Payment.belongsTo(Order, { as: 'order', foreignKey: 'orderId', onDelete: 'RESTRICT' })
+  User.hasMany(Payment, {
+    as: 'confirmedPayments',
+    foreignKey: 'adminConfirmedByUserId',
+    onDelete: 'SET NULL',
+  })
+  Payment.belongsTo(User, {
+    as: 'adminConfirmedBy',
+    foreignKey: 'adminConfirmedByUserId',
+    onDelete: 'SET NULL',
+  })
   Payment.hasMany(PaymentEvent, {
     as: 'events',
     foreignKey: 'paymentId',
@@ -269,6 +291,7 @@ export {
   OrderStatusHistory,
   Payment,
   PaymentEvent,
+  PasswordResetToken,
   Product,
   ProductImage,
   SiteSection,

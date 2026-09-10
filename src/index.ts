@@ -1,7 +1,9 @@
 import 'dotenv/config'
-import { app } from './app.js'
+import { createServer } from 'node:http'
+import { allowedOrigins, app } from './app.js'
 import { validateAuthConfig } from './config/auth.js'
 import { connectDatabase, disconnectDatabase } from './config/database.js'
+import { attachOrderSocket } from './services/orderSocket.js'
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000
 
@@ -10,7 +12,9 @@ const startServer = async () => {
     validateAuthConfig()
     await connectDatabase()
 
-    const server = app.listen(port, () => {
+    const server = createServer(app)
+    attachOrderSocket(server, allowedOrigins)
+    server.listen(port, () => {
       console.log(`sour-lemon-backend listening on http://localhost:${port}`)
     })
 

@@ -32,11 +32,32 @@ export const updateCurrentUser = asyncHandler(async (request, response) => {
   }
 
   if (input.name !== undefined) user.name = input.name
+  if (input.email !== undefined) user.email = input.email
   if (input.phoneNumber !== undefined) user.phoneNumber = input.phoneNumber
   if (input.whatsappNumber !== undefined) user.whatsappNumber = input.whatsappNumber
 
   await user.save()
   response.json({ user: toUserResponse(user) })
+})
+
+export const getCurrentUser = asyncHandler(async (request, response) => {
+  const user = await authenticatedUser(request.auth!.userId)
+  const defaultAddress = await Address.findOne({
+    where: { userId: user.id, isDefault: true },
+  })
+  response.json({
+    user: toUserResponse(user),
+    defaultAddress: defaultAddress ? {
+      id: defaultAddress.id,
+      deliveryAreaId: defaultAddress.deliveryAreaId,
+      recipientName: defaultAddress.recipientName,
+      phoneNumber: defaultAddress.phoneNumber,
+      addressLine1: defaultAddress.addressLine1,
+      addressLine2: defaultAddress.addressLine2,
+      city: defaultAddress.city,
+      landmark: defaultAddress.landmark,
+    } : null,
+  })
 })
 
 export const deleteCurrentUser = asyncHandler(async (request, response) => {

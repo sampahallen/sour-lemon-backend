@@ -120,7 +120,9 @@ export const addCartItem = asyncHandler(async (request, response) => {
     where: { cartId: context.cart.id, productId: input.productId },
   })
   if (existingItem) {
-    await existingItem.update({ quantity: existingItem.quantity + input.quantity })
+    const quantity = existingItem.quantity + input.quantity
+    if (quantity > 99) throw new HttpError(400, 'Cart item quantity cannot exceed 99')
+    await existingItem.update({ quantity })
   } else {
     await CartItem.create({
       cartId: context.cart.id,

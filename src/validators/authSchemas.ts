@@ -11,6 +11,8 @@ const password = z
   .min(8)
   .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, 'Password must be at most 72 bytes')
 
+const email = z.string().trim().toLowerCase().email().max(254)
+
 const deliveryAddress = z
   .object({
     addressLine1: z.string().trim().min(1).max(255),
@@ -23,6 +25,7 @@ const deliveryAddress = z
 export const signUpSchema = z
   .object({
     name: z.string().trim().min(2).max(120),
+    email,
     phoneNumber: e164Phone,
     password,
     whatsappNumber: e164Phone.nullable().optional(),
@@ -37,9 +40,19 @@ export const signInSchema = z
   })
   .strict()
 
+export const forgotPasswordSchema = z.object({ phoneNumber: e164Phone }).strict()
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(32).max(256),
+    password,
+  })
+  .strict()
+
 export const updateUserSchema = z
   .object({
     name: z.string().trim().min(2).max(120).optional(),
+    email: email.optional(),
     phoneNumber: e164Phone.optional(),
     whatsappNumber: e164Phone.nullable().optional(),
     currentPassword: z.string().min(1).optional(),
@@ -49,6 +62,7 @@ export const updateUserSchema = z
   .refine(
     (body) =>
       body.name !== undefined ||
+      body.email !== undefined ||
       body.phoneNumber !== undefined ||
       body.whatsappNumber !== undefined ||
       body.newPassword !== undefined,
@@ -70,6 +84,8 @@ export const deleteUserSchema = z.object({ password: z.string().min(1) }).strict
 
 export type SignUpInput = z.infer<typeof signUpSchema>
 export type SignInInput = z.infer<typeof signInSchema>
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
 export type UserListQuery = z.infer<typeof userListQuerySchema>
 export type DeleteUserInput = z.infer<typeof deleteUserSchema>

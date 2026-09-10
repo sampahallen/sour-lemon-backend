@@ -5,6 +5,7 @@ import { AppSetting } from '../models/AppSetting.js'
 import { Category } from '../models/Category.js'
 import { Product } from '../models/Product.js'
 import { ProductImage } from '../models/ProductImage.js'
+import { OrderItem } from '../models/OrderItem.js'
 import { SiteSection } from '../models/SiteSection.js'
 import type {
   AdminProductQuery,
@@ -25,6 +26,11 @@ const categoryInclude = {
   model: Category,
   as: 'category',
   attributes: ['id', 'name', 'slug'],
+}
+
+const deleteProductImageObjectUnlessOrdered = async (image: ProductImage) => {
+  const orderReferenceCount = await OrderItem.unscoped().count({ where: { productImageUrl: image.url } })
+  if (orderReferenceCount === 0) await deleteProductImageObject(image.storageKey)
 }
 
 const imageInclude = {
@@ -205,7 +211,7 @@ export const deleteProduct = asyncHandler(async (request, response) => {
     await ProductImage.update({ isDeleted: true }, { where: { productId: product.id }, transaction })
     await product.update({ isDeleted: true, isActive: false }, { transaction })
   })
-  await Promise.allSettled(images.map((image) => deleteProductImageObject(image.storageKey)))
+  await Promise.allSettled(images.map(deleteProductImageObjectUnlessOrdered))
   response.status(204).send()
 })
 
@@ -298,7 +304,7 @@ export const deleteProductImage = asyncHandler(async (request, response) => {
   })
   if (!image) throw new HttpError(404, 'Product image not found')
   await image.update({ isDeleted: true })
-  await deleteProductImageObject(image.storageKey)
+  await deleteProductImageObjectUnlessOrdered(image)
   response.status(204).send()
 })
 

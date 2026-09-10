@@ -8,6 +8,7 @@ import {
   Sequelize,
 } from 'sequelize'
 import { Order } from './Order.js'
+import { User } from './User.js'
 import {
   PAYMENT_METHODS,
   PAYMENT_PROVIDERS,
@@ -28,9 +29,13 @@ export class Payment extends Model<InferAttributes<Payment>, InferCreationAttrib
   declare currency: CreationOptional<string>
   declare providerReference: string | null
   declare checkoutUrl: string | null
+  declare providerAccessCode: string | null
   declare failureCode: string | null
   declare failureMessage: string | null
   declare paidAt: Date | null
+  declare requiresManualConfirmation: CreationOptional<boolean>
+  declare adminConfirmedAt: Date | null
+  declare adminConfirmedByUserId: ForeignKey<User['id']> | null
   declare providerData: JsonObject | null
   declare isDeleted: CreationOptional<boolean>
   declare createdAt: CreationOptional<Date>
@@ -62,9 +67,13 @@ export const initPayment = (sequelize: Sequelize) => {
       currency: { type: DataTypes.CHAR(3), allowNull: false, defaultValue: 'GHS' },
       providerReference: { type: DataTypes.STRING(160), allowNull: true, unique: true },
       checkoutUrl: { type: DataTypes.TEXT, allowNull: true, validate: { isUrl: true } },
+      providerAccessCode: { type: DataTypes.STRING(255), allowNull: true },
       failureCode: { type: DataTypes.TEXT, allowNull: true },
       failureMessage: { type: DataTypes.TEXT, allowNull: true },
       paidAt: { type: DataTypes.DATE, allowNull: true },
+      requiresManualConfirmation: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      adminConfirmedAt: { type: DataTypes.DATE, allowNull: true },
+      adminConfirmedByUserId: { type: DataTypes.UUID, allowNull: true },
       providerData: { type: DataTypes.JSONB, allowNull: true },
       isDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       createdAt: DataTypes.DATE,
@@ -76,7 +85,13 @@ export const initPayment = (sequelize: Sequelize) => {
       modelName: 'Payment',
       underscored: true,
       defaultScope: { where: { isDeleted: false } },
-      indexes: [{ fields: ['order_id', 'status'] }],
+      indexes: [
+        { fields: ['order_id', 'status'] },
+        {
+          name: 'payments_manual_confirmation_queue',
+          fields: ['requires_manual_confirmation', 'admin_confirmed_at'],
+        },
+      ],
       validate: {
         validProviderAndMethod(this: Payment) {
           if (this.provider === 'cash' && this.method !== 'cash') {
