@@ -61,6 +61,7 @@ const paymentSummary = (payment: Payment | null) => payment ? {
   id: payment.id,
   provider: payment.provider,
   method: payment.method,
+  paymentName: payment.paymentName,
   status: payment.status,
   displayStatus: paymentDisplayStatus(payment),
   checkoutUrl: payment.checkoutUrl,
@@ -162,9 +163,13 @@ const loadCustomerSummaries = async (orders: Order[]) => {
 }
 
 export const listCustomerOrders = asyncHandler(async (request, response) => {
-  const { page, limit } = request.validatedQuery as CustomerOrderListQuery
+  const { scope, page, limit } = request.validatedQuery as CustomerOrderListQuery
   const { count, rows } = await Order.findAndCountAll({
-    where: { userId: request.auth!.userId },
+    where: {
+      userId: request.auth!.userId,
+      ...(scope === 'active' ? { status: { [Op.notIn]: ['completed', 'cancelled'] } } : {}),
+      ...(scope === 'history' ? { status: { [Op.in]: ['completed', 'cancelled'] } } : {}),
+    },
     order: [['createdAt', 'DESC']],
     limit,
     offset: (page - 1) * limit,

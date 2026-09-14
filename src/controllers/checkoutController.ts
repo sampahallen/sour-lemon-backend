@@ -232,6 +232,7 @@ export const createCheckout = asyncHandler(async (request, response) => {
       orderId: createdOrder.id,
       provider: isCash ? 'cash' : 'paystack',
       method: input.paymentMethod,
+      paymentName: isCash ? null : input.paymentName!,
       status: isCash ? 'cash_due' : 'pending',
       amount: createdOrder.total,
       currency: createdOrder.currency,
@@ -254,6 +255,7 @@ export const createCheckout = asyncHandler(async (request, response) => {
         currency: createdOrder.currency,
         reference: payment.providerReference!,
         method: input.paymentMethod as 'card' | 'momo',
+        paymentName: input.paymentName!,
         orderId: createdOrder.id,
         orderNumber: createdOrder.orderNumber,
       })

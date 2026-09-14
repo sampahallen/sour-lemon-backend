@@ -61,6 +61,7 @@ export const resumeOrRetryPayment = asyncHandler(async (request, response) => {
       orderId: lockedOrder.id,
       provider: 'paystack',
       method: latest.method,
+      paymentName: latest.paymentName ?? lockedOrder.customerName,
       status: 'pending',
       amount: lockedOrder.total,
       currency: lockedOrder.currency,
@@ -81,6 +82,7 @@ export const resumeOrRetryPayment = asyncHandler(async (request, response) => {
       currency: lockedOrder.currency,
       reference: created.providerReference!,
       method: latest.method as 'card' | 'momo',
+      paymentName: created.paymentName!,
       orderId: lockedOrder.id,
       orderNumber: lockedOrder.orderNumber,
     })

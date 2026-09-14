@@ -2,6 +2,7 @@ import { Sequelize } from 'sequelize'
 import { Address, initAddress } from './Address.js'
 import { AppSetting, initAppSetting } from './AppSetting.js'
 import { AuthSession, initAuthSession } from './AuthSession.js'
+import { AuthRefreshUse, initAuthRefreshUse } from './AuthRefreshUse.js'
 import { Cart, initCart } from './Cart.js'
 import { CartItem, initCartItem } from './CartItem.js'
 import { Category, initCategory } from './Category.js'
@@ -29,6 +30,7 @@ export const initializeModels = (sequelize: Sequelize) => {
 
   initUser(sequelize)
   initAuthSession(sequelize)
+  initAuthRefreshUse(sequelize)
   initPasswordResetToken(sequelize)
   initDeliveryArea(sequelize)
   initAddress(sequelize)
@@ -65,6 +67,8 @@ export const initializeModels = (sequelize: Sequelize) => {
 
   User.hasMany(AuthSession, { as: 'authSessions', foreignKey: 'userId', onDelete: 'CASCADE' })
   AuthSession.belongsTo(User, { as: 'user', foreignKey: 'userId', onDelete: 'CASCADE' })
+  AuthSession.hasMany(AuthRefreshUse, { as: 'refreshUses', foreignKey: 'sessionId', onDelete: 'CASCADE' })
+  AuthRefreshUse.belongsTo(AuthSession, { as: 'session', foreignKey: 'sessionId', onDelete: 'CASCADE' })
   User.hasMany(PasswordResetToken, {
     as: 'passwordResetTokens',
     foreignKey: 'userId',
@@ -277,6 +281,7 @@ export {
   Address,
   AppSetting,
   AuthSession,
+  AuthRefreshUse,
   Cart,
   CartItem,
   Category,

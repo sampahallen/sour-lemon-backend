@@ -4,6 +4,7 @@ import { allowedOrigins, app } from './app.js'
 import { validateAuthConfig } from './config/auth.js'
 import { connectDatabase, disconnectDatabase } from './config/database.js'
 import { attachOrderSocket } from './services/orderSocket.js'
+import { startAuthSessionCleanup } from './services/authSessionCleanup.js'
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000
 
@@ -11,6 +12,7 @@ const startServer = async () => {
   try {
     validateAuthConfig()
     await connectDatabase()
+    const stopAuthSessionCleanup = startAuthSessionCleanup()
 
     const server = createServer(app)
     attachOrderSocket(server, allowedOrigins)
@@ -20,6 +22,7 @@ const startServer = async () => {
 
     const shutdown = (signal: string) => {
       console.log(`${signal} received; shutting down`)
+      stopAuthSessionCleanup()
       server.close(() => {
         void disconnectDatabase()
           .then(() => process.exit(0))

@@ -4,9 +4,13 @@ import { rateLimit } from 'express-rate-limit'
 import {
   forgotPassword,
   refresh,
+  refreshAdmin,
+  refreshCustomer,
   resetPassword,
   signIn,
   signOut,
+  signOutAdmin,
+  signOutCustomer,
   signUp,
 } from '../controllers/authController.js'
 import { validateBody } from '../middleware/validateRequest.js'
@@ -57,3 +61,7 @@ authRouter.post(
 )
 authRouter.post('/refresh', refresh)
 authRouter.post('/signout', signOut)
+authRouter.post('/admin/refresh', refreshAdmin)
+authRouter.post('/admin/signout', signOutAdmin)
+authRouter.post('/customer/refresh', refreshCustomer)
+authRouter.post('/customer/signout', signOutCustomer)

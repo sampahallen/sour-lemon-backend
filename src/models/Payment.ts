@@ -24,6 +24,7 @@ export class Payment extends Model<InferAttributes<Payment>, InferCreationAttrib
   declare orderId: ForeignKey<Order['id']>
   declare provider: PaymentProvider
   declare method: PaymentMethod
+  declare paymentName: string | null
   declare status: CreationOptional<PaymentStatus>
   declare amount: string
   declare currency: CreationOptional<string>
@@ -57,6 +58,7 @@ export const initPayment = (sequelize: Sequelize) => {
         allowNull: false,
         validate: { isIn: [[...PAYMENT_METHODS]] },
       },
+      paymentName: { type: DataTypes.STRING(120), allowNull: true },
       status: {
         type: DataTypes.STRING(32),
         allowNull: false,

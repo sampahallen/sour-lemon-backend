@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import type { Request } from 'express'
 import { AppSetting } from '../models/AppSetting.js'
 import { Order } from '../models/Order.js'
@@ -12,13 +12,17 @@ export const hashOrderAccessToken = (token: string) =>
   createHash('sha256').update(token).digest('hex')
 
 export const requireOrderAccess = (request: Request, order: Order) => {
-  if (request.auth?.role === 'admin' || (request.auth && order.userId === request.auth.userId)) return
+  if (request.auth?.role === 'admin') return
+  if (request.auth?.role === 'customer' && order.userId === request.auth.userId) return
+
   const token = request.header('x-order-access-token')
-  if (
-    !token ||
-    !order.guestAccessTokenHash ||
-    hashOrderAccessToken(token) !== order.guestAccessTokenHash
-  ) {
+  if (order.userId !== null || !token || !order.guestAccessTokenHash) {
+    throw new HttpError(403, 'You do not have access to this order')
+  }
+
+  const expectedHash = Buffer.from(order.guestAccessTokenHash, 'hex')
+  const receivedHash = createHash('sha256').update(token).digest()
+  if (expectedHash.length !== receivedHash.length || !timingSafeEqual(expectedHash, receivedHash)) {
     throw new HttpError(403, 'You do not have access to this order')
   }
 }

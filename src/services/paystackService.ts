@@ -65,6 +65,7 @@ export const initializePaystackTransaction = async (input: {
   currency: string
   reference: string
   method: 'card' | 'momo'
+  paymentName: string
   orderId: string
   orderNumber: string
 }) => {
@@ -76,7 +77,11 @@ export const initializePaystackTransaction = async (input: {
       currency: input.currency,
       reference: input.reference,
       channels: [input.method === 'momo' ? 'mobile_money' : 'card'],
-      metadata: { orderId: input.orderId, orderNumber: input.orderNumber },
+      metadata: {
+        orderId: input.orderId,
+        orderNumber: input.orderNumber,
+        paymentName: input.paymentName,
+      },
     }),
   })
   if (!result.status || !result.data) {

@@ -29,6 +29,7 @@ test('accepts a complete Sour Lemon delivery snapshot', () => {
     customerEmail: 'CUSTOMER@EXAMPLE.COM',
     fulfillmentType: 'sour_lemon_delivery',
     paymentMethod: 'momo',
+    paymentName: 'Akosua Mensah',
     deliveryAreaId: '9e18c661-3038-4cbe-ae79-ef250bc3bbdd',
     deliveryAddress: {
       recipientName: 'Ama Mensah',
@@ -39,6 +40,14 @@ test('accepts a complete Sour Lemon delivery snapshot', () => {
   })
   assert.equal(parsed.success, true)
   if (parsed.success) assert.equal(parsed.data.customerEmail, 'customer@example.com')
+})
+
+test('requires the receipt name for online payments', () => {
+  const result = checkoutSchema.safeParse({
+    ...baseCheckout,
+    paymentMethod: 'momo',
+  })
+  assert.equal(result.success, false)
 })
 
 test('accepts only supported admin payment groups', () => {
@@ -55,4 +64,10 @@ test('normalizes customer order pagination and rejects excessive page sizes', ()
     limit: 20,
   })
   assert.equal(customerOrderListQuerySchema.safeParse({ limit: 51 }).success, false)
+})
+
+test('accepts current and past customer order views only', () => {
+  assert.equal(customerOrderListQuerySchema.parse({ scope: 'active' }).scope, 'active')
+  assert.equal(customerOrderListQuerySchema.parse({ scope: 'history' }).scope, 'history')
+  assert.equal(customerOrderListQuerySchema.safeParse({ scope: 'all-users' }).success, false)
 })

@@ -1,8 +1,7 @@
 import type { Server as HttpServer } from 'node:http'
 import jwt from 'jsonwebtoken'
 import { Server } from 'socket.io'
-import { getJwtSecret } from '../config/auth.js'
-import { User } from '../models/User.js'
+import { verifyAccessToken } from '../middleware/authMiddleware.js'
 import { onOrderChanged } from './orderEvents.js'
 
 export const attachOrderSocket = (server: HttpServer, allowedOrigins: string[]) => {
@@ -16,16 +15,16 @@ export const attachOrderSocket = (server: HttpServer, allowedOrigins: string[]) 
       ? socket.handshake.auth.token
       : ''
     try {
-      const payload = jwt.verify(token, getJwtSecret())
-      if (typeof payload === 'string' || !payload.sub || payload.role !== 'admin') {
+      const auth = await verifyAccessToken(token)
+      if (auth.role !== 'admin') {
         throw new Error('Admin authentication required')
       }
-      const user = await User.findOne({
-        where: { id: payload.sub, role: 'admin', isActive: true, isDeleted: false },
-        attributes: ['id'],
-      })
-      if (!user) throw new Error('Admin authentication required')
-      socket.data.userId = user.id
+      socket.data.userId = auth.userId
+      const payload = jwt.decode(token)
+      const expiresAt = payload && typeof payload !== 'string' ? payload.exp : null
+      if (typeof expiresAt !== 'number') throw new Error('Admin authentication required')
+      const timeout = setTimeout(() => socket.disconnect(true), Math.max(0, expiresAt * 1000 - Date.now()))
+      socket.on('disconnect', () => clearTimeout(timeout))
       next()
     } catch {
       next(new Error('Admin authentication required'))

@@ -31,8 +31,17 @@ export const checkoutSchema = z.object({
   deliveryAreaId: z.string().uuid().nullable().optional(),
   deliveryAddress: deliveryAddress.nullable().optional(),
   paymentMethod: z.enum(['card', 'momo', 'cash']),
+  paymentName: z.string().trim().min(2).max(120).optional(),
   customerNotes: z.string().trim().max(2000).nullable().optional(),
-}).strict()
+}).strict().superRefine((input, context) => {
+  if (input.paymentMethod !== 'cash' && !input.paymentName) {
+    context.addIssue({
+      code: 'custom',
+      path: ['paymentName'],
+      message: 'Enter the name that will appear on the payment',
+    })
+  }
+})
 
 export const orderStatusUpdateSchema = z.object({
   toStatus: z.enum([
@@ -77,6 +86,7 @@ export const groupedOrdersQuerySchema = z.object({
 }).strict()
 
 export const customerOrderListQuerySchema = z.object({
+  scope: z.enum(['active', 'history']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
 }).strict()

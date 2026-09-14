@@ -17,6 +17,7 @@ export class AuthSession extends Model<
   declare userId: ForeignKey<User['id']>
   declare refreshTokenHash: string
   declare expiresAt: Date
+  declare lastActivityAt: Date
   declare revokedAt: Date | null
   declare isDeleted: CreationOptional<boolean>
   declare createdAt: CreationOptional<Date>
@@ -33,6 +34,7 @@ export const initAuthSession = (sequelize: Sequelize) => {
         unique: true,
       },
       expiresAt: { type: DataTypes.DATE, allowNull: false },
+      lastActivityAt: { type: DataTypes.DATE, allowNull: false },
       revokedAt: { type: DataTypes.DATE, allowNull: true },
       isDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       createdAt: DataTypes.DATE,

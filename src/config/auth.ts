@@ -1,7 +1,8 @@
 import { SignOptions } from 'jsonwebtoken'
+import type { UserRole } from '../models/types.js'
 
 const DEFAULT_BCRYPT_ROUNDS = 12
-const DEFAULT_JWT_EXPIRES_IN: SignOptions['expiresIn'] = '1h'
+const DEFAULT_JWT_EXPIRES_IN: SignOptions['expiresIn'] = '15m'
 const DEFAULT_REFRESH_TOKEN_DAYS = 30
 
 export const getJwtSecret = () => {
@@ -39,6 +40,30 @@ export const getRefreshTokenDays = () => {
 export const getRefreshCookieName = () =>
   process.env.REFRESH_COOKIE_NAME?.trim() || 'sour_lemon_refresh_token'
 
+export const getRoleRefreshCookieName = (role: UserRole) => `${getRefreshCookieName()}_${role}`
+
+export const getAppOrigin = (role: UserRole) => {
+  const configured = role === 'admin' ? process.env.ADMIN_APP_ORIGIN?.trim() : process.env.CUSTOMER_APP_ORIGIN?.trim()
+  if (process.env.NODE_ENV === 'production' && !configured) throw new Error(`${role.toUpperCase()}_APP_ORIGIN must be configured`)
+  const origin = new URL(configured || (role === 'admin' ? 'http://localhost:5174' : 'http://localhost:5173'))
+  if (process.env.NODE_ENV === 'production' && origin.protocol !== 'https:') throw new Error(`${role.toUpperCase()}_APP_ORIGIN must use HTTPS`)
+  return origin.origin
+}
+
+const durationHours = (name: string, fallback: number) => {
+  const hours = Number(process.env[name] ?? fallback)
+  if (!Number.isFinite(hours) || hours <= 0) throw new Error(`${name} must be a positive number of hours`)
+  return hours * 60 * 60 * 1000
+}
+
+export const getSessionAbsoluteMs = (role: UserRole) => role === 'admin'
+  ? durationHours('ADMIN_SESSION_HOURS', 12)
+  : durationHours('CUSTOMER_SESSION_HOURS', getRefreshTokenDays() * 24)
+
+export const getSessionIdleMs = (role: UserRole) => role === 'admin'
+  ? durationHours('ADMIN_SESSION_IDLE_HOURS', 2)
+  : durationHours('CUSTOMER_SESSION_IDLE_HOURS', 7 * 24)
+
 export const getGuestCartCookieName = () =>
   process.env.GUEST_CART_COOKIE_NAME?.trim() || 'sour_lemon_guest_cart'
 
@@ -47,4 +72,17 @@ export const validateAuthConfig = () => {
   getJwtExpiresIn()
   getBcryptRounds()
   getRefreshTokenDays()
+  getSessionAbsoluteMs('admin')
+  getSessionAbsoluteMs('customer')
+  getSessionIdleMs('admin')
+  getSessionIdleMs('customer')
+  const adminOrigin = getAppOrigin('admin')
+  const customerOrigin = getAppOrigin('customer')
+  if (adminOrigin === customerOrigin) throw new Error('Admin and customer apps must use different origins')
+  if (process.env.NODE_ENV === 'production') {
+    const allowed = (process.env.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim())
+    if (!allowed.includes(adminOrigin) || !allowed.includes(customerOrigin)) {
+      throw new Error('CORS_ORIGINS must include both app origins')
+    }
+  }
 }
