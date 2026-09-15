@@ -6,7 +6,7 @@ API for the Sour Lemon site. Node + Express + TypeScript + PostgreSQL/Sequelize.
 
 - `npm run dev` — start the dev server with Nodemon watch mode
 - `npm run build` — type-check and compile to `dist/`
-- `npm start` — run the compiled server from `dist/`
+- `npm start` — apply pending migrations and run the compiled server from `dist/`
 - `npm run lint` — run ESLint
 
 ## Environment
@@ -54,7 +54,7 @@ execution history in PostgreSQL's `SequelizeMeta` and `SequelizeData` tables.
    npm run db:migrate
    ```
 
-5. Insert the initial sections, cake categories, and application settings:
+5. Insert the initial cake categories and application settings:
 
    ```bash
    npm run db:seed
@@ -63,6 +63,11 @@ execution history in PostgreSQL's `SequelizeMeta` and `SequelizeData` tables.
 Use `npm run db:migrate:undo` to revert only the latest migration. Use
 `npm run db:migrate:undo:all` only for a disposable database because it removes
 the entire application schema. Undo seed data with `npm run db:seed:undo`.
+
+Production startup automatically applies pending migrations and seeders before
+the API begins accepting traffic. Navigation sections are bootstrapped by an
+idempotent migration, and the seeders insert missing application defaults with
+conflict-safe queries, so later deployments preserve administrator choices.
 
 Generate future migration skeletons with:
 
