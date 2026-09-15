@@ -1,17 +1,44 @@
 import 'dotenv/config'
-import express from 'express'
-import cors from 'cors'
+import { createServer } from 'node:http'
+import { allowedOrigins, app } from './app.js'
+import { validateAuthConfig } from './config/auth.js'
+import { connectDatabase, disconnectDatabase } from './config/database.js'
+import { attachOrderSocket } from './services/orderSocket.js'
+import { startAuthSessionCleanup } from './services/authSessionCleanup.js'
 
-const app = express()
 const port = process.env.PORT ? Number(process.env.PORT) : 4000
 
-app.use(cors())
-app.use(express.json())
+const startServer = async () => {
+  try {
+    validateAuthConfig()
+    await connectDatabase()
+    const stopAuthSessionCleanup = startAuthSessionCleanup()
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' })
-})
+    const server = createServer(app)
+    attachOrderSocket(server, allowedOrigins)
+    server.listen(port, () => {
+      console.log(`sour-lemon-backend listening on http://localhost:${port}`)
+    })
 
-app.listen(port, () => {
-  console.log(`sour-lemon-backend listening on http://localhost:${port}`)
-})
+    const shutdown = (signal: string) => {
+      console.log(`${signal} received; shutting down`)
+      stopAuthSessionCleanup()
+      server.close(() => {
+        void disconnectDatabase()
+          .then(() => process.exit(0))
+          .catch((error: unknown) => {
+            console.error('Failed to close the database connection', error)
+            process.exit(1)
+          })
+      })
+    }
+
+    process.once('SIGINT', () => shutdown('SIGINT'))
+    process.once('SIGTERM', () => shutdown('SIGTERM'))
+  } catch (error) {
+    console.error('Unable to connect to PostgreSQL', error)
+    process.exit(1)
+  }
+}
+
+void startServer()
