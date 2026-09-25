@@ -14,10 +14,8 @@ const journalBody = z
 export const journalCategoryCreateSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
-    slug: slug.max(120).optional(),
     description: optionalNullableText(2_000),
     isActive: z.boolean().optional(),
-    sortOrder: z.number().int().min(0).max(10_000).optional(),
   })
   .strict()
 
@@ -73,6 +71,10 @@ export const journalImageReorderSchema = z
   .object({ imageIds: z.array(uuid).min(1).max(100).refine((ids) => new Set(ids).size === ids.length) })
   .strict()
 
+export const journalCategoryReorderSchema = z
+  .object({ categoryIds: z.array(uuid).min(1).max(100).refine((ids) => new Set(ids).size === ids.length) })
+  .strict()
+
 export type JournalCategoryCreateInput = z.infer<typeof journalCategoryCreateSchema>
 export type JournalCategoryUpdateInput = z.infer<typeof journalCategoryUpdateSchema>
 export type JournalPostCreateInput = z.infer<typeof journalPostCreateSchema>
@@ -82,3 +84,4 @@ export type JournalAdminPostQuery = z.infer<typeof journalAdminPostQuerySchema>
 export type JournalScheduleInput = z.infer<typeof journalScheduleSchema>
 export type JournalImageInput = z.infer<typeof journalImageSchema>
 export type JournalImageReorderInput = z.infer<typeof journalImageReorderSchema>
+export type JournalCategoryReorderInput = z.infer<typeof journalCategoryReorderSchema>

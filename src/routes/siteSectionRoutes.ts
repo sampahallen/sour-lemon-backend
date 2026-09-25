@@ -6,10 +6,11 @@ import {
 import { authenticate, authorizeRoles } from '../middleware/authMiddleware.js'
 import { validateBody } from '../middleware/validateRequest.js'
 import { siteSectionUpdateSchema } from '../validators/siteSectionSchemas.js'
+import { publicCache } from '../middleware/cacheControl.js'
 
 export const siteSectionRouter = Router()
 
-siteSectionRouter.get('/', listPublicSiteSections)
+siteSectionRouter.get('/', publicCache('standard'), listPublicSiteSections)
 siteSectionRouter.patch(
   '/:id',
   authenticate,

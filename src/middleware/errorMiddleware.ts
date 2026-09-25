@@ -4,11 +4,13 @@ import { UniqueConstraintError, ValidationError } from 'sequelize'
 import { HttpError } from '../utils/HttpError.js'
 
 export const notFound: RequestHandler = (request, response) => {
+  response.set('Cache-Control', 'no-store')
   response.status(404).json({ error: `Route not found: ${request.method} ${request.path}` })
 }
 
 export const errorHandler: ErrorRequestHandler = (error: unknown, _request, response, next) => {
   void next
+  response.set('Cache-Control', 'no-store')
   if (error instanceof HttpError) {
     response.status(error.status).json({ error: error.message, details: error.details })
     return
