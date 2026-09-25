@@ -15,6 +15,7 @@ import { paystackWebhook } from './controllers/paymentController.js'
 import { publicSettingsRouter } from './routes/publicSettingsRoutes.js'
 import { siteSectionRouter } from './routes/siteSectionRoutes.js'
 import { userRouter } from './routes/userRoutes.js'
+import { noStore } from './middleware/cacheControl.js'
 
 export const app = express()
 
@@ -35,6 +36,7 @@ app.use(cors({
 }))
 app.post('/api/payments/paystack/webhook', express.raw({ type: 'application/json' }), paystackWebhook)
 app.use(express.json())
+app.use(noStore)
 
 app.get('/health', (_request, response) => {
   response.json({ status: 'ok', database: 'connected' })

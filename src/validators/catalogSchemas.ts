@@ -13,9 +13,7 @@ export const categoryCreateSchema = z
   .object({
     siteSectionId: uuid,
     name: z.string().trim().min(1).max(100),
-    slug: slug.max(120).optional(),
     isActive: z.boolean().optional(),
-    sortOrder: z.number().int().min(0).max(10_000).optional(),
   })
   .strict()
 
@@ -67,6 +65,13 @@ export const productImageReorderSchema = z
   .object({ imageIds: z.array(uuid).min(1).max(20).refine((ids) => new Set(ids).size === ids.length) })
   .strict()
 
+export const categoryReorderSchema = z
+  .object({
+    siteSectionId: uuid,
+    categoryIds: z.array(uuid).min(1).max(100).refine((ids) => new Set(ids).size === ids.length),
+  })
+  .strict()
+
 export type CategoryQuery = z.infer<typeof categoryQuerySchema>
 export type CategoryCreateInput = z.infer<typeof categoryCreateSchema>
 export type CategoryUpdateInput = z.infer<typeof categoryUpdateSchema>
@@ -76,3 +81,4 @@ export type AdminProductQuery = z.infer<typeof adminProductQuerySchema>
 export type PublicProductQuery = z.infer<typeof publicProductQuerySchema>
 export type ProductImageInput = z.infer<typeof productImageSchema>
 export type ProductImageReorderInput = z.infer<typeof productImageReorderSchema>
+export type CategoryReorderInput = z.infer<typeof categoryReorderSchema>

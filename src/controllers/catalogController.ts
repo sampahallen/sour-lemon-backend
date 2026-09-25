@@ -1,4 +1,4 @@
-import { Op } from 'sequelize'
+import { Op, UniqueConstraintError } from 'sequelize'
 import { deleteProductImageObject, uploadProductImage } from '../config/storage.js'
 import { sequelize } from '../config/database.js'
 import { AppSetting } from '../models/AppSetting.js'
@@ -11,6 +11,7 @@ import type {
   AdminProductQuery,
   CategoryCreateInput,
   CategoryQuery,
+  CategoryReorderInput,
   CategoryUpdateInput,
   ProductCreateInput,
   ProductImageInput,
@@ -20,7 +21,7 @@ import type {
 } from '../validators/catalogSchemas.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
-import { toSlug } from '../utils/slug.js'
+import { nextAvailableSlug, toSlug } from '../utils/slug.js'
 
 const categoryInclude = {
   model: Category,
@@ -43,6 +44,19 @@ const generatedSlug = (preferred: string | undefined, fallback: string) => {
   const value = preferred ?? toSlug(fallback)
   if (!value) throw new HttpError(400, 'A valid slug could not be generated')
   return value
+}
+
+const isSlugCollision = (error: unknown) =>
+  error instanceof UniqueConstraintError && error.errors.some((item) => item.path === 'slug')
+
+const availableCategorySlug = async (name: string, excludeId?: string) => {
+  const slug = await nextAvailableSlug(name, async (candidate) => (
+    await Category.unscoped().count({
+      where: { slug: candidate, ...(excludeId ? { id: { [Op.ne]: excludeId } } : {}) },
+    })
+  ) > 0)
+  if (!slug) throw new HttpError(400, 'A valid slug could not be generated')
+  return slug
 }
 
 const serializeProduct = (product: Product) => {
@@ -98,13 +112,22 @@ export const createCategory = asyncHandler(async (request, response) => {
   const input = request.validatedBody as CategoryCreateInput
   const section = await SiteSection.findByPk(input.siteSectionId)
   if (!section) throw new HttpError(400, 'Site section not found')
-  const category = await Category.create({
-    siteSectionId: input.siteSectionId,
-    name: input.name,
-    slug: generatedSlug(input.slug, input.name),
-    isActive: input.isActive ?? true,
-    sortOrder: input.sortOrder ?? 0,
-  })
+  const maxSortOrder = await Category.max('sortOrder', { where: { siteSectionId: input.siteSectionId } })
+  let category: Category
+  for (;;) {
+    try {
+      category = await Category.create({
+        siteSectionId: input.siteSectionId,
+        name: input.name,
+        slug: await availableCategorySlug(input.name),
+        isActive: input.isActive ?? true,
+        sortOrder: typeof maxSortOrder === 'number' ? maxSortOrder + 1 : 0,
+      })
+      break
+    } catch (error) {
+      if (!isSlugCollision(error)) throw error
+    }
+  }
   response.status(201).json({ category })
 })
 
@@ -117,12 +140,44 @@ export const updateCategory = asyncHandler(async (request, response) => {
     if (!section) throw new HttpError(400, 'Site section not found')
     category.siteSectionId = input.siteSectionId
   }
+  const nameChanged = input.name !== undefined && input.name !== category.name
   if (input.name !== undefined) category.name = input.name
-  if (input.slug !== undefined) category.slug = input.slug
   if (input.isActive !== undefined) category.isActive = input.isActive
-  if (input.sortOrder !== undefined) category.sortOrder = input.sortOrder
-  await category.save()
+  if (nameChanged) {
+    for (;;) {
+      category.slug = await availableCategorySlug(category.name, category.id)
+      try {
+        await category.save()
+        break
+      } catch (error) {
+        if (!isSlugCollision(error)) throw error
+      }
+    }
+  } else {
+    await category.save()
+  }
   response.json({ category })
+})
+
+export const reorderCategories = asyncHandler(async (request, response) => {
+  const { siteSectionId, categoryIds } = request.validatedBody as CategoryReorderInput
+  const categories = await Category.findAll({ where: { siteSectionId }, attributes: ['id'] })
+  const currentIds = new Set(categories.map((category) => category.id))
+  if (categories.length !== categoryIds.length || categoryIds.some((id) => !currentIds.has(id))) {
+    throw new HttpError(400, 'Provide every category in this section exactly once')
+  }
+
+  await sequelize.transaction(async (transaction) => {
+    await Promise.all(categoryIds.map((id, sortOrder) => (
+      Category.update({ sortOrder }, { where: { id, siteSectionId }, transaction })
+    )))
+  })
+
+  const reordered = await Category.findAll({
+    where: { siteSectionId },
+    order: [['sortOrder', 'ASC'], ['name', 'ASC']],
+  })
+  response.json({ categories: reordered })
 })
 
 export const deleteCategory = asyncHandler(async (request, response) => {
