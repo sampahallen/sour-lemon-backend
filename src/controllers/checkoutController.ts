@@ -93,18 +93,14 @@ const resolveFulfillment = async (
   input: CheckoutQuoteInput,
   transaction?: Transaction,
 ) => {
-  const [feeModeValue, pickupLocationValue] = await Promise.all([
-    getSetting('delivery_fee_mode', transaction),
-    getSetting('pickup_location', transaction),
-  ])
+  const feeModeValue = await getSetting('delivery_fee_mode', transaction)
   const deliveryFeeMode = feeModeValue === 'included' ? 'included' : 'rider'
-  const pickupLocation = typeof pickupLocationValue === 'string' ? pickupLocationValue : null
 
   if (input.fulfillmentType !== 'sour_lemon_delivery') {
     if (input.deliveryAreaId) {
       throw new HttpError(400, 'This fulfillment option does not use a delivery area')
     }
-    return { deliveryArea: null, deliveryFeeCents: 0, deliveryFeeMode, pickupLocation }
+    return { deliveryArea: null, deliveryFeeCents: 0, deliveryFeeMode }
   }
   if (!input.deliveryAreaId) throw new HttpError(400, 'Choose a delivery area')
   const deliveryArea = await DeliveryArea.findOne({
@@ -120,7 +116,6 @@ const resolveFulfillment = async (
     deliveryArea,
     deliveryFeeCents: deliveryFeeMode === 'included' ? toCents(deliveryArea.deliveryFee!) : 0,
     deliveryFeeMode,
-    pickupLocation,
   }
 }
 
@@ -139,7 +134,6 @@ export const quoteCheckout = asyncHandler(async (request, response) => {
       total: fromCents(pricedCart.subtotalCents + fulfillment.deliveryFeeCents),
       currency: pricedCart.currency,
     },
-    pickupLocation: fulfillment.pickupLocation,
     deliveryFeeMode: fulfillment.deliveryFeeMode,
   })
 })

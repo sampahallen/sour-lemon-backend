@@ -38,7 +38,7 @@ module.exports = {
           (key, value, description, is_deleted, created_at, updated_at)
          VALUES
           ('business_whatsapp_number', 'null'::jsonb, 'WhatsApp number used for customer handoffs', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-          ('pickup_location', 'null'::jsonb, 'Customer-facing pickup location', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+          ('pickup_location', 'null'::jsonb, 'Private collection location for ready-order messages', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
           ('manual_payment_review', 'true'::jsonb, 'Require owner review after verified payment', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
           ('delivery_fee_mode', '"rider"'::jsonb, 'Whether delivery fees come from areas or riders', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
           ('menu_scheduling_enabled', 'false'::jsonb, 'Allow scheduled catalog availability', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)

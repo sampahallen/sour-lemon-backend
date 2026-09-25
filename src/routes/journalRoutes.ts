@@ -13,6 +13,7 @@ import {
   listPublicJournalCategories,
   listPublicJournalPosts,
   publishJournalPost,
+  reorderJournalCategories,
   reorderJournalPostImages,
   scheduleJournalPost,
   updateJournalCategory,
@@ -20,11 +21,13 @@ import {
   uploadJournalPostImage,
 } from '../controllers/journalController.js'
 import { authenticate, authorizeRoles } from '../middleware/authMiddleware.js'
+import { publicCache } from '../middleware/cacheControl.js'
 import { journalImageUpload, validateJournalImageFile } from '../middleware/journalImageUpload.js'
 import { validateBody, validateQuery } from '../middleware/validateRequest.js'
 import {
   journalAdminPostQuerySchema,
   journalCategoryCreateSchema,
+  journalCategoryReorderSchema,
   journalCategoryUpdateSchema,
   journalImageReorderSchema,
   journalImageSchema,
@@ -36,14 +39,19 @@ import {
 
 export const journalRouter = Router()
 
-journalRouter.get('/categories', listPublicJournalCategories)
-journalRouter.get('/posts', validateQuery(journalPublicPostQuerySchema), listPublicJournalPosts)
-journalRouter.get('/posts/:slug', getPublicJournalPost)
+journalRouter.get('/categories', publicCache('journal'), listPublicJournalCategories)
+journalRouter.get('/posts', publicCache('journal'), validateQuery(journalPublicPostQuerySchema), listPublicJournalPosts)
+journalRouter.get('/posts/:slug', publicCache('journal'), getPublicJournalPost)
 
 journalRouter.use(authenticate, authorizeRoles('admin'))
 
 journalRouter.get('/admin/categories', listAdminJournalCategories)
 journalRouter.post('/categories', validateBody(journalCategoryCreateSchema), createJournalCategory)
+journalRouter.patch(
+  '/categories/reorder',
+  validateBody(journalCategoryReorderSchema),
+  reorderJournalCategories,
+)
 journalRouter.patch(
   '/categories/:categoryId',
   validateBody(journalCategoryUpdateSchema),

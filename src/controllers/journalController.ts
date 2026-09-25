@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Op } from 'sequelize'
+import { Op, UniqueConstraintError } from 'sequelize'
 import { sequelize } from '../config/database.js'
 import { deleteJournalImageObject, uploadJournalImage } from '../config/storage.js'
 import { JournalCategory } from '../models/JournalCategory.js'
@@ -8,10 +8,11 @@ import { JournalPostImage } from '../models/JournalPostImage.js'
 import { User } from '../models/User.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
-import { toDraftSlug, toSlug } from '../utils/slug.js'
+import { nextAvailableSlug, toDraftSlug, toSlug } from '../utils/slug.js'
 import {
   JournalAdminPostQuery,
   JournalCategoryCreateInput,
+  JournalCategoryReorderInput,
   JournalCategoryUpdateInput,
   JournalImageInput,
   JournalImageReorderInput,
@@ -67,6 +68,23 @@ const generatedSlug = (preferred: string | undefined, fallback: string) => {
   return value
 }
 
+const isSlugCollision = (error: unknown) =>
+  error instanceof UniqueConstraintError && error.errors.some((item) => item.path === 'slug')
+
+const availableJournalCategorySlug = async (name: string, excludeId?: string) => {
+  const slug = await nextAvailableSlug(name, async (candidate) => (
+    await JournalCategory.unscoped().count({
+      where: {
+        slug: candidate,
+        isDeleted: false,
+        ...(excludeId ? { id: { [Op.ne]: excludeId } } : {}),
+      },
+    })
+  ) > 0)
+  if (!slug) throw new HttpError(400, 'A valid slug could not be generated')
+  return slug
+}
+
 const removeStoredImages = async (images: JournalPostImage[]) => {
   const results = await Promise.allSettled(
     images.map((image) => deleteJournalImageObject(image.storageKey)),
@@ -95,13 +113,22 @@ export const listAdminJournalCategories = asyncHandler(async (_request, response
 
 export const createJournalCategory = asyncHandler(async (request, response) => {
   const input = request.validatedBody as JournalCategoryCreateInput
-  const category = await JournalCategory.create({
-    name: input.name,
-    slug: generatedSlug(input.slug, input.name),
-    description: input.description ?? null,
-    isActive: input.isActive ?? true,
-    sortOrder: input.sortOrder ?? 0,
-  })
+  const maxSortOrder = await JournalCategory.max('sortOrder')
+  let category: JournalCategory
+  for (;;) {
+    try {
+      category = await JournalCategory.create({
+        name: input.name,
+        slug: await availableJournalCategorySlug(input.name),
+        description: input.description ?? null,
+        isActive: input.isActive ?? true,
+        sortOrder: typeof maxSortOrder === 'number' ? maxSortOrder + 1 : 0,
+      })
+      break
+    } catch (error) {
+      if (!isSlugCollision(error)) throw error
+    }
+  }
   response.status(201).json({ category })
 })
 
@@ -110,14 +137,44 @@ export const updateJournalCategory = asyncHandler(async (request, response) => {
   const category = await JournalCategory.findByPk(request.params.categoryId)
   if (!category) throw new HttpError(404, 'Journal category not found')
 
+  const nameChanged = input.name !== undefined && input.name !== category.name
   if (input.name !== undefined) category.name = input.name
-  if (input.slug !== undefined) category.slug = input.slug
   if (input.description !== undefined) category.description = input.description
   if (input.isActive !== undefined) category.isActive = input.isActive
-  if (input.sortOrder !== undefined) category.sortOrder = input.sortOrder
-
-  await category.save()
+  if (nameChanged) {
+    for (;;) {
+      category.slug = await availableJournalCategorySlug(category.name, category.id)
+      try {
+        await category.save()
+        break
+      } catch (error) {
+        if (!isSlugCollision(error)) throw error
+      }
+    }
+  } else {
+    await category.save()
+  }
   response.json({ category })
+})
+
+export const reorderJournalCategories = asyncHandler(async (request, response) => {
+  const { categoryIds } = request.validatedBody as JournalCategoryReorderInput
+  const categories = await JournalCategory.findAll({ attributes: ['id'] })
+  const currentIds = new Set(categories.map((category) => category.id))
+  if (categories.length !== categoryIds.length || categoryIds.some((id) => !currentIds.has(id))) {
+    throw new HttpError(400, 'Provide every Journal category exactly once')
+  }
+
+  await sequelize.transaction(async (transaction) => {
+    await Promise.all(categoryIds.map((id, sortOrder) => (
+      JournalCategory.update({ sortOrder }, { where: { id }, transaction })
+    )))
+  })
+
+  const reordered = await JournalCategory.findAll({
+    order: [['sortOrder', 'ASC'], ['name', 'ASC']],
+  })
+  response.json({ categories: reordered })
 })
 
 export const deleteJournalCategory = asyncHandler(async (request, response) => {
