@@ -1,4 +1,5 @@
-import { Op, UniqueConstraintError } from 'sequelize'
+import { randomUUID } from 'node:crypto'
+import { Op, UniqueConstraintError, type Transaction } from 'sequelize'
 import { deleteProductImageObject, uploadProductImage } from '../config/storage.js'
 import { sequelize } from '../config/database.js'
 import { AppSetting } from '../models/AppSetting.js'
@@ -16,17 +17,19 @@ import type {
   ProductCreateInput,
   ProductImageInput,
   ProductImageReorderInput,
+  ProductReorderInput,
   ProductUpdateInput,
   PublicProductQuery,
 } from '../validators/catalogSchemas.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 import { nextAvailableSlug, toSlug } from '../utils/slug.js'
+import { isExactProductOrder } from '../utils/productOrder.js'
 
 const categoryInclude = {
   model: Category,
   as: 'category',
-  attributes: ['id', 'name', 'slug'],
+  attributes: ['id', 'name', 'slug', 'isActive'],
 }
 
 const deleteProductImageObjectUnlessOrdered = async (image: ProductImage) => {
@@ -38,12 +41,6 @@ const imageInclude = {
   model: ProductImage,
   as: 'images',
   required: false,
-}
-
-const generatedSlug = (preferred: string | undefined, fallback: string) => {
-  const value = preferred ?? toSlug(fallback)
-  if (!value) throw new HttpError(400, 'A valid slug could not be generated')
-  return value
 }
 
 const isSlugCollision = (error: unknown) =>
@@ -83,6 +80,16 @@ const requireProduct = async (productId: string) => {
   if (!product) throw new HttpError(404, 'Product not found')
   return product
 }
+
+const bakerySection = async (transaction?: Transaction) => {
+  const section = await SiteSection.findOne({ where: { key: 'cakes' }, transaction })
+  if (!section) throw new HttpError(404, 'Bakery section not found')
+  return section
+}
+
+const bakeryCategoryIds = async (siteSectionId: string, transaction?: Transaction) => (
+  await Category.findAll({ where: { siteSectionId }, attributes: ['id'], transaction })
+).map((category) => category.id)
 
 const detailedProduct = async (productId: string) => {
   const product = await Product.findByPk(productId, {
@@ -218,6 +225,51 @@ export const listAdminProducts = asyncHandler(async (request, response) => {
   response.json({ products: products.map(serializeProduct) })
 })
 
+export const getBakeryArrangement = asyncHandler(async (_request, response) => {
+  const section = await bakerySection()
+  const categoryIds = await bakeryCategoryIds(section.id)
+  const schedulingSetting = await AppSetting.findByPk('menu_scheduling_enabled')
+  const schedulingEnabled = (schedulingSetting?.value as unknown) === true
+  const now = new Date()
+  const products = await Product.findAll({
+    where: { categoryId: { [Op.in]: categoryIds } },
+    include: [categoryInclude, imageInclude],
+    order: [['sortOrder', 'ASC'], ['name', 'ASC'], ['id', 'ASC']],
+  })
+  response.json({
+    products: products.map((product) => {
+      const raw = serializeProduct(product)
+      const category = product.get('category') as Category | undefined
+      const isCurrentlyVisible = section.isEnabled && category?.isActive === true && product.isActive &&
+        product.archivedAt === null && (!schedulingEnabled || (
+          (product.availableFrom === null || product.availableFrom <= now) &&
+          (product.availableUntil === null || product.availableUntil > now)
+        ))
+      return { ...raw, isCurrentlyVisible }
+    }),
+  })
+})
+
+export const reorderProducts = asyncHandler(async (request, response) => {
+  const { productIds } = request.validatedBody as ProductReorderInput
+  await sequelize.transaction(async (transaction) => {
+    const section = await bakerySection(transaction)
+    const categoryIds = await bakeryCategoryIds(section.id, transaction)
+    const current = await Product.findAll({
+      where: { categoryId: { [Op.in]: categoryIds } },
+      attributes: ['id'],
+      transaction,
+    })
+    if (!isExactProductOrder(productIds, current.map((product) => product.id))) {
+      throw new HttpError(409, 'Bakery products changed. Refresh the arrangement and try again')
+    }
+    await Promise.all(productIds.map((id, sortOrder) => (
+      Product.update({ sortOrder }, { where: { id }, transaction })
+    )))
+  })
+  response.json({ productIds })
+})
+
 export const getAdminProduct = asyncHandler(async (request, response) => {
   response.json({ product: await detailedProduct(request.params.productId) })
 })
@@ -225,18 +277,33 @@ export const getAdminProduct = asyncHandler(async (request, response) => {
 export const createProduct = asyncHandler(async (request, response) => {
   const input = request.validatedBody as ProductCreateInput
   await requireCategory(input.categoryId)
-  const product = await Product.create({
-    categoryId: input.categoryId,
-    name: input.name,
-    slug: generatedSlug(input.slug, input.name),
-    description: input.description ?? null,
-    price: input.price.toFixed(2),
-    currency: input.currency ?? 'GHS',
-    isActive: input.isActive ?? true,
-    availableFrom: input.availableFrom ?? null,
-    availableUntil: input.availableUntil ?? null,
-    archivedAt: null,
-  })
+  const productId = randomUUID()
+  const slugBase = toSlug(input.name) ? input.name : `product-${productId}`
+  let product: Product
+  for (;;) {
+    const slug = input.slug ?? await nextAvailableSlug(slugBase, async (candidate) => (
+      await Product.unscoped().count({ where: { slug: candidate } })
+    ) > 0, 180)
+    try {
+      product = await Product.create({
+        id: productId,
+        categoryId: input.categoryId,
+        name: input.name,
+        slug,
+        description: input.description ?? null,
+        price: input.price.toFixed(2),
+        currency: input.currency ?? 'GHS',
+        isActive: input.isActive ?? true,
+        sortOrder: null,
+        availableFrom: input.availableFrom ?? null,
+        availableUntil: input.availableUntil ?? null,
+        archivedAt: null,
+      })
+      break
+    } catch (error) {
+      if (!isSlugCollision(error) || input.slug) throw error
+    }
+  }
   response.status(201).json({ product: await detailedProduct(product.id) })
 })
 
@@ -304,7 +371,10 @@ export const listPublicProducts = asyncHandler(async (request, response) => {
       },
       imageInclude,
     ],
-    order: [['name', 'ASC']],
+    // PostgreSQL sorts NULL last for ascending order, so unsorted products follow saved positions.
+    order: category
+      ? [['name', 'ASC'], ['id', 'ASC']]
+      : [['sortOrder', 'ASC'], ['name', 'ASC'], ['id', 'ASC']],
     limit,
   })
   response.json({ products: products.map(serializeProduct) })
