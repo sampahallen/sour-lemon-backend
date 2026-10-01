@@ -18,6 +18,7 @@ export class Product extends Model<InferAttributes<Product>, InferCreationAttrib
   declare price: string
   declare currency: CreationOptional<string>
   declare isActive: CreationOptional<boolean>
+  declare sortOrder: number | null
   declare availableFrom: Date | null
   declare availableUntil: Date | null
   declare archivedAt: Date | null
@@ -37,6 +38,7 @@ export const initProduct = (sequelize: Sequelize) => {
       price: { type: DataTypes.DECIMAL(12, 2), allowNull: false, validate: { min: 0 } },
       currency: { type: DataTypes.CHAR(3), allowNull: false, defaultValue: 'GHS' },
       isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+      sortOrder: { type: DataTypes.INTEGER, allowNull: true },
       availableFrom: { type: DataTypes.DATE, allowNull: true },
       availableUntil: { type: DataTypes.DATE, allowNull: true },
       archivedAt: { type: DataTypes.DATE, allowNull: true },

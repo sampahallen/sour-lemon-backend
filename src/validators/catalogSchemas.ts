@@ -65,6 +65,10 @@ export const productImageReorderSchema = z
   .object({ imageIds: z.array(uuid).min(1).max(20).refine((ids) => new Set(ids).size === ids.length) })
   .strict()
 
+export const productReorderSchema = z
+  .object({ productIds: z.array(uuid).refine((ids) => new Set(ids).size === ids.length) })
+  .strict()
+
 export const categoryReorderSchema = z
   .object({
     siteSectionId: uuid,
@@ -81,4 +85,5 @@ export type AdminProductQuery = z.infer<typeof adminProductQuerySchema>
 export type PublicProductQuery = z.infer<typeof publicProductQuerySchema>
 export type ProductImageInput = z.infer<typeof productImageSchema>
 export type ProductImageReorderInput = z.infer<typeof productImageReorderSchema>
+export type ProductReorderInput = z.infer<typeof productReorderSchema>
 export type CategoryReorderInput = z.infer<typeof categoryReorderSchema>

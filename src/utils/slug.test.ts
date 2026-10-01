@@ -17,6 +17,14 @@ describe('numbered category slugs', () => {
     assert.equal(slug.endsWith('-12'), true)
   })
 
+  it('generates a unique product slug within the product limit', async () => {
+    const taken = new Set(['a'.repeat(180)])
+    const slug = await nextAvailableSlug('A'.repeat(200), async (candidate) => taken.has(candidate), 180)
+
+    assert.equal(slug.length, 180)
+    assert.equal(slug.endsWith('-1'), true)
+  })
+
   it('returns an empty slug when the name has no slug characters', async () => {
     assert.equal(await nextAvailableSlug('---', async () => false), '')
   })
@@ -35,5 +43,12 @@ describe('toDraftSlug', () => {
 
     assert.equal(slug.length, 220)
     assert.match(slug, /^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  })
+
+  it('uses the post id when the title has no slug characters', () => {
+    assert.equal(
+      toDraftSlug('🍋', '8dff56dc-934e-4a20-a852-25fc3dfe45af'),
+      'post-8dff56dc-934e-4a20-a852-25fc3dfe45af',
+    )
   })
 })

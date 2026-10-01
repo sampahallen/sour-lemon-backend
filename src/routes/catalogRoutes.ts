@@ -6,6 +6,7 @@ import {
   deleteProduct,
   deleteProductImage,
   getAdminProduct,
+  getBakeryArrangement,
   getPublicProduct,
   listAdminCategories,
   listAdminProducts,
@@ -13,6 +14,7 @@ import {
   listPublicProducts,
   reorderCategories,
   reorderProductImages,
+  reorderProducts,
   updateCategory,
   updateProduct,
   uploadProductImageController,
@@ -29,6 +31,7 @@ import {
   categoryUpdateSchema,
   productCreateSchema,
   productImageReorderSchema,
+  productReorderSchema,
   productImageSchema,
   productUpdateSchema,
   publicProductQuerySchema,
@@ -50,8 +53,10 @@ categoryRouter.delete('/:categoryId', deleteCategory)
 export const productRouter = Router()
 productRouter.use(authenticate, authorizeRoles('admin'))
 productRouter.get('/', validateQuery(adminProductQuerySchema), listAdminProducts)
+productRouter.get('/arrangement', getBakeryArrangement)
 productRouter.get('/:productId', getAdminProduct)
 productRouter.post('/', validateBody(productCreateSchema), createProduct)
+productRouter.patch('/reorder', validateBody(productReorderSchema), reorderProducts)
 productRouter.patch('/:productId', validateBody(productUpdateSchema), updateProduct)
 productRouter.delete('/:productId', deleteProduct)
 productRouter.post(
