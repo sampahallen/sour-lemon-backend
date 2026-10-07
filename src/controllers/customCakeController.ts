@@ -1,6 +1,9 @@
 import { deleteCustomCakeImageObject, uploadCustomCakeImage } from '../config/storage.js'
 import { CustomCakeImage } from '../models/CustomCakeImage.js'
 import { CustomCakeRequest } from '../models/CustomCakeRequest.js'
+import { PaymentProof } from '../models/PaymentProof.js'
+import { cakePaymentUrl, proofResponse } from '../services/manualPaymentService.js'
+import { randomBytes } from 'node:crypto'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 import { buildCustomCakeWhatsAppOptions } from '../services/whatsappComposerService.js'
@@ -54,7 +57,8 @@ const customCakeRequestDetail = async (customCakeRequest: CustomCakeRequest) => 
     where: { customCakeRequestId: customCakeRequest.id },
     order: [['createdAt', 'ASC']],
   })
-  return toCustomCakeRequestDetail(customCakeRequest, images)
+  const proofs = await PaymentProof.findAll({ where: { customCakeRequestId: customCakeRequest.id }, order: [['createdAt', 'DESC']] })
+  return { ...toCustomCakeRequestDetail(customCakeRequest, images), paymentProofs: proofs.map(proofResponse) }
 }
 
 export const createCustomCakeRequest = asyncHandler(async (request, response) => {
@@ -121,7 +125,11 @@ export const getCustomCakeRequest = asyncHandler(async (request, response) => {
 export const quoteCustomCakeRequest = asyncHandler(async (request, response) => {
   const input = request.validatedBody as CustomCakeQuoteInput
   const customCakeRequest = await requireCustomCakeRequest(request.params.id)
+  if (!['submitted', 'quoted'].includes(customCakeRequest.status)) throw new HttpError(409, 'This quote can no longer be changed')
+  const existingProof = await PaymentProof.findOne({ where: { customCakeRequestId: customCakeRequest.id } })
+  if (existingProof) throw new HttpError(409, 'A payment proof has already been submitted')
   customCakeRequest.status = 'quoted'
+  customCakeRequest.paymentLinkNonce = randomBytes(32).toString('hex')
   customCakeRequest.quotedAmount = input.quotedAmount.toFixed(2)
   customCakeRequest.quotedAt = new Date()
   customCakeRequest.quotedByUserId = request.auth!.userId
@@ -156,5 +164,6 @@ export const getCustomCakeWhatsAppOptions = asyncHandler(async (request, respons
     occasion: customCakeRequest.occasion,
     quotedAmount: customCakeRequest.quotedAmount,
     currency: customCakeRequest.currency,
+    paymentUrl: cakePaymentUrl(customCakeRequest),
   }))
 })

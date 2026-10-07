@@ -12,6 +12,8 @@ import {
   updateOrderStatus,
 } from '../controllers/orderController.js'
 import { resumeOrRetryPayment } from '../controllers/paymentController.js'
+import { getOrderProofs, submitOrderProof } from '../controllers/manualPaymentController.js'
+import { paymentProofRateLimit, paymentProofUpload, validatePaymentProof } from '../middleware/paymentProofUpload.js'
 import { authenticate, authorizeRoles, optionalAuthenticate } from '../middleware/authMiddleware.js'
 import { validateBody, validateQuery } from '../middleware/validateRequest.js'
 import {
@@ -31,6 +33,8 @@ orderRouter.get(
   listCustomerOrders,
 )
 orderRouter.get('/:id/receipt', optionalAuthenticate, getOrderReceiptController)
+orderRouter.get('/:id/payment-proofs', optionalAuthenticate, getOrderProofs)
+orderRouter.post('/:id/payment-proofs', paymentProofRateLimit, optionalAuthenticate, paymentProofUpload.single('file'), validatePaymentProof, submitOrderProof)
 orderRouter.post('/:orderId/payments', optionalAuthenticate, resumeOrRetryPayment)
 
 orderRouter.use(authenticate, authorizeRoles('admin'))

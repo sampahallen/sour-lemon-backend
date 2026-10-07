@@ -33,7 +33,7 @@ export const FULFILLMENT_TYPES = [
 ] as const
 export type FulfillmentType = (typeof FULFILLMENT_TYPES)[number]
 
-export const PAYMENT_PROVIDERS = ['paystack', 'cash'] as const
+export const PAYMENT_PROVIDERS = ['paystack', 'cash', 'manual_momo'] as const
 export type PaymentProvider = (typeof PAYMENT_PROVIDERS)[number]
 
 export const PAYMENT_METHODS = ['card', 'momo', 'cash'] as const

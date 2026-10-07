@@ -30,7 +30,7 @@ export const checkoutSchema = z.object({
   fulfillmentType,
   deliveryAreaId: z.string().uuid().nullable().optional(),
   deliveryAddress: deliveryAddress.nullable().optional(),
-  paymentMethod: z.enum(['card', 'momo', 'cash']),
+  paymentMethod: z.enum(['momo', 'cash']),
   paymentName: z.string().trim().min(2).max(120).optional(),
   customerNotes: z.string().trim().max(2000).nullable().optional(),
 }).strict().superRefine((input, context) => {

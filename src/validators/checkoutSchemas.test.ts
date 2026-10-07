@@ -20,6 +20,7 @@ test('normalizes checkout phone numbers', () => {
 
 test('rejects unsupported payment methods and unknown fields', () => {
   assert.equal(checkoutSchema.safeParse({ ...baseCheckout, paymentMethod: 'bank' }).success, false)
+  assert.equal(checkoutSchema.safeParse({ ...baseCheckout, paymentMethod: 'card' }).success, false)
   assert.equal(checkoutSchema.safeParse({ ...baseCheckout, price: '0.01' }).success, false)
 })
 

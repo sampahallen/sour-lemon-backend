@@ -7,6 +7,9 @@ export const APP_SETTING_KEYS = [
   'manual_payment_review',
   'delivery_fee_mode',
   'menu_scheduling_enabled',
+  'momo_payment_number',
+  'momo_recipient_name',
+  'momo_network',
 ] as const
 
 const nullableWhatsappNumber = z.preprocess(
@@ -27,6 +30,9 @@ const appSettingUpdateSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('manual_payment_review'), value: z.boolean() }).strict(),
   z.object({ key: z.literal('delivery_fee_mode'), value: z.enum(['included', 'rider']) }).strict(),
   z.object({ key: z.literal('menu_scheduling_enabled'), value: z.boolean() }).strict(),
+  z.object({ key: z.literal('momo_payment_number'), value: nullableWhatsappNumber }).strict(),
+  z.object({ key: z.literal('momo_recipient_name'), value: z.string().trim().min(2).max(120).nullable() }).strict(),
+  z.object({ key: z.literal('momo_network'), value: z.string().trim().min(2).max(80).nullable() }).strict(),
 ])
 
 export const appSettingsUpdateSchema = z.object({

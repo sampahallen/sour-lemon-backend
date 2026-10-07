@@ -12,7 +12,6 @@ import { Payment } from '../models/Payment.js'
 import { Product } from '../models/Product.js'
 import { ProductImage } from '../models/ProductImage.js'
 import { User } from '../models/User.js'
-import { initializePaystackTransaction } from '../services/paystackService.js'
 import { getOrderReceipt, hashOrderAccessToken } from '../services/orderService.js'
 import { allocateOrderNumber } from '../services/orderNumberService.js'
 import { publishOrderChanged } from '../services/orderEvents.js'
@@ -167,16 +166,18 @@ export const createCheckout = asyncHandler(async (request, response) => {
       if (!user) throw new HttpError(401, 'Authentication required')
       customerEmail = user.email
     }
-    if (input.paymentMethod !== 'cash' && !customerEmail) {
-      throw new HttpError(400, 'Add an email address before paying online')
+    if (input.paymentMethod === 'momo') {
+      const settings = await Promise.all(['momo_payment_number', 'momo_recipient_name', 'momo_network']
+        .map((key) => getSetting(key, transaction)))
+      if (settings.some((value) => typeof value !== 'string' || !value.trim())) {
+        throw new HttpError(503, 'Mobile Money payment is not configured')
+      }
     }
 
     if (!request.auth) guestAccessToken = randomBytes(32).toString('base64url')
     const now = new Date()
     const isCash = input.paymentMethod === 'cash'
-    const requiresManualConfirmation = isCash || (
-      await getSetting('manual_payment_review', transaction)
-    ) === true
+    const requiresManualConfirmation = true
     const totalCents = pricedCart.subtotalCents + fulfillment.deliveryFeeCents
     const reservedOrderNumber = await allocateOrderNumber(transaction)
     const createdOrder = await Order.create({
@@ -224,13 +225,13 @@ export const createCheckout = asyncHandler(async (request, response) => {
 
     const payment = await Payment.create({
       orderId: createdOrder.id,
-      provider: isCash ? 'cash' : 'paystack',
+      provider: isCash ? 'cash' : 'manual_momo',
       method: input.paymentMethod,
       paymentName: isCash ? null : input.paymentName!,
       status: isCash ? 'cash_due' : 'pending',
       amount: createdOrder.total,
       currency: createdOrder.currency,
-      providerReference: isCash ? null : `SLP-${randomBytes(12).toString('hex')}`,
+      providerReference: null,
       checkoutUrl: null,
       providerAccessCode: null,
       failureCode: null,
@@ -241,24 +242,6 @@ export const createCheckout = asyncHandler(async (request, response) => {
       adminConfirmedByUserId: null,
       providerData: null,
     }, { transaction })
-
-    if (!isCash) {
-      const initialized = await initializePaystackTransaction({
-        email: customerEmail!,
-        amountCents: totalCents,
-        currency: createdOrder.currency,
-        reference: payment.providerReference!,
-        method: input.paymentMethod as 'card' | 'momo',
-        paymentName: input.paymentName!,
-        orderId: createdOrder.id,
-        orderNumber: createdOrder.orderNumber,
-      })
-      await payment.update({
-        providerReference: initialized.reference,
-        checkoutUrl: initialized.checkoutUrl,
-        providerAccessCode: initialized.accessCode,
-      }, { transaction })
-    }
 
     await cart.update({ status: 'converted' }, { transaction })
     return { order: createdOrder, payment }

@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import { getCakePayment, submitCakeProof, getCakePaymentLink, revokeCakePaymentLink } from '../controllers/manualPaymentController.js'
+import { paymentProofRateLimit, paymentProofUpload, validatePaymentProof } from '../middleware/paymentProofUpload.js'
 import {
   cancelCustomCakeRequest,
   createCustomCakeRequest,
@@ -24,6 +26,9 @@ import {
 
 export const customCakeRouter = Router()
 
+customCakeRouter.get('/:id/payment/:token', getCakePayment)
+customCakeRouter.post('/:id/payment/:token/proofs', paymentProofRateLimit, paymentProofUpload.single('file'), validatePaymentProof, submitCakeProof)
+
 customCakeRouter.post(
   '/',
   optionalAuthenticate,
@@ -45,6 +50,8 @@ customCakeRouter.get(
   listCustomCakeRequests,
 )
 customCakeRouter.get('/:id', authenticate, authorizeRoles('admin'), getCustomCakeRequest)
+customCakeRouter.get('/:id/payment-link', authenticate, authorizeRoles('admin'), getCakePaymentLink)
+customCakeRouter.post('/:id/payment-link/rotate', authenticate, authorizeRoles('admin'), revokeCakePaymentLink)
 customCakeRouter.get(
   '/:id/whatsapp-options',
   authenticate,

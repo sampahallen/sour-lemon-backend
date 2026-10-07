@@ -5,6 +5,8 @@ import { Order } from '../models/Order.js'
 import { OrderItem } from '../models/OrderItem.js'
 import { OrderStatusHistory } from '../models/OrderStatusHistory.js'
 import { Payment } from '../models/Payment.js'
+import { PaymentProof } from '../models/PaymentProof.js'
+import { proofResponse } from '../services/manualPaymentService.js'
 import { AppSetting } from '../models/AppSetting.js'
 import { getOrderReceipt, requireOrderAccess } from '../services/orderService.js'
 import { publishOrderChanged } from '../services/orderEvents.js'
@@ -116,6 +118,9 @@ const adminOrderDetail = async (order: Order) => {
       createdAt: entry.createdAt,
     })),
     payment: paymentSummary(payment),
+    paymentProofs: payment?.provider === 'manual_momo'
+      ? (await PaymentProof.findAll({ where: { paymentId: payment.id }, order: [['createdAt', 'DESC']] })).map(proofResponse)
+      : [],
   }
 }
 

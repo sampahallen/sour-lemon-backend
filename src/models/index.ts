@@ -17,6 +17,7 @@ import { OrderItem, initOrderItem } from './OrderItem.js'
 import { OrderStatusHistory, initOrderStatusHistory } from './OrderStatusHistory.js'
 import { Payment, initPayment } from './Payment.js'
 import { PaymentEvent, initPaymentEvent } from './PaymentEvent.js'
+import { PaymentProof, initPaymentProof } from './PaymentProof.js'
 import { PasswordResetToken, initPasswordResetToken } from './PasswordResetToken.js'
 import { Product, initProduct } from './Product.js'
 import { ProductImage, initProductImage } from './ProductImage.js'
@@ -45,6 +46,7 @@ export const initializeModels = (sequelize: Sequelize) => {
   initOrderStatusHistory(sequelize)
   initPayment(sequelize)
   initPaymentEvent(sequelize)
+  initPaymentProof(sequelize)
   initCustomCakeRequest(sequelize)
   initCustomCakeImage(sequelize)
   initAppSetting(sequelize)
@@ -190,6 +192,8 @@ export const initializeModels = (sequelize: Sequelize) => {
     foreignKey: 'paymentId',
     onDelete: 'SET NULL',
   })
+  Payment.hasMany(PaymentProof, { as: 'proofs', foreignKey: 'paymentId', onDelete: 'RESTRICT' })
+  PaymentProof.belongsTo(Payment, { as: 'payment', foreignKey: 'paymentId', onDelete: 'RESTRICT' })
 
   User.hasMany(CustomCakeRequest, {
     as: 'customCakeRequests',
@@ -221,6 +225,8 @@ export const initializeModels = (sequelize: Sequelize) => {
     foreignKey: 'orderId',
     onDelete: 'RESTRICT',
   })
+  CustomCakeRequest.hasMany(PaymentProof, { as: 'paymentProofs', foreignKey: 'customCakeRequestId', onDelete: 'RESTRICT' })
+  PaymentProof.belongsTo(CustomCakeRequest, { as: 'customCakeRequest', foreignKey: 'customCakeRequestId', onDelete: 'RESTRICT' })
   CustomCakeRequest.hasMany(CustomCakeImage, {
     as: 'images',
     foreignKey: 'customCakeRequestId',
@@ -296,6 +302,7 @@ export {
   OrderStatusHistory,
   Payment,
   PaymentEvent,
+  PaymentProof,
   PasswordResetToken,
   Product,
   ProductImage,
