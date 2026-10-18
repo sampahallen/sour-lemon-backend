@@ -4,6 +4,8 @@ import { AppSetting } from '../models/AppSetting.js'
 import { Order } from '../models/Order.js'
 import { OrderItem } from '../models/OrderItem.js'
 import { Payment } from '../models/Payment.js'
+import { PaymentProof } from '../models/PaymentProof.js'
+import { getMomoDetails, proofResponse } from './manualPaymentService.js'
 import { ProductImage } from '../models/ProductImage.js'
 import { paymentDisplayStatus } from './orderWorkflow.js'
 import { HttpError } from '../utils/HttpError.js'
@@ -40,6 +42,12 @@ export const getOrderReceipt = async (order: Order): Promise<Record<string, unkn
   const message = `Hi Sour Lemon! I just placed order ${order.orderNumber}: ${itemLines}. Total: ${order.currency} ${order.total}. Fulfillment: ${order.fulfillmentType.replace(/_/g, ' ')}.`
   const businessNumber = typeof whatsappSetting?.value === 'string'
     ? whatsappSetting.value
+    : null
+  const proofs = payment?.provider === 'manual_momo'
+    ? await PaymentProof.findAll({ where: { paymentId: payment.id }, order: [['createdAt', 'DESC']] })
+    : []
+  const momo = payment?.provider === 'manual_momo' && payment.status === 'pending'
+    ? await getMomoDetails().catch(() => null)
     : null
   const productIdsNeedingFallback = [...new Set(items
     .filter((item) => !item.productImageUrl && item.productId)
@@ -94,6 +102,8 @@ export const getOrderReceipt = async (order: Order): Promise<Record<string, unkn
       amount: payment.amount,
       accessCode: payment.status === 'pending' ? payment.providerAccessCode : null,
     } : null,
+    momo,
+    paymentProofs: proofs.map(proofResponse),
     whatsappLink: businessNumber ? buildWhatsAppLink(businessNumber, message) : null,
   }
 }

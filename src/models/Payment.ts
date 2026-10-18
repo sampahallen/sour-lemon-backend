@@ -102,6 +102,9 @@ export const initPayment = (sequelize: Sequelize) => {
           if (this.provider === 'paystack' && this.method === 'cash') {
             throw new Error('Paystack payments cannot use the cash method')
           }
+          if (this.provider === 'manual_momo' && this.method !== 'momo') {
+            throw new Error('Manual Mobile Money payments must use the momo method')
+          }
         },
       },
     },

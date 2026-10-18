@@ -69,6 +69,24 @@ the API begins accepting traffic. Navigation sections are bootstrapped by an
 idempotent migration, and the seeders insert missing application defaults with
 conflict-safe queries, so later deployments preserve administrator choices.
 
+## Manual Mobile Money payments
+
+Run the manual payment migration before using the new checkout. Configure the
+Mobile Money number, recipient name, and network in the admin Settings page.
+New Mobile Money orders cannot be placed until all three values are set.
+
+Set `AWS_S3_PAYMENT_PROOF_BUCKET` to a private bucket that is not exposed by
+`AWS_S3_PUBLIC_BASE_URL` or its CDN. The API stores receipt screenshots there
+and serves them only to authenticated administrators. The API role needs
+`s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` for that bucket.
+
+Customers submit a transaction reference or screenshot after paying outside
+the site. An administrator must check the actual Mobile Money account and
+confirm the proof in Payment proofs before the order can be prepared. Quoted
+custom cakes receive a private payment link through the WhatsApp quote template.
+Keep the Paystack webhook and credentials active while older Paystack orders
+remain unsettled; new checkouts do not create Paystack transactions.
+
 Generate future migration skeletons with:
 
 ```bash

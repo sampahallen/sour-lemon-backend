@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  checkoutQuoteSchema,
   checkoutSchema,
   customerOrderListQuerySchema,
   orderListQuerySchema,
@@ -20,6 +21,7 @@ test('normalizes checkout phone numbers', () => {
 
 test('rejects unsupported payment methods and unknown fields', () => {
   assert.equal(checkoutSchema.safeParse({ ...baseCheckout, paymentMethod: 'bank' }).success, false)
+  assert.equal(checkoutSchema.safeParse({ ...baseCheckout, paymentMethod: 'card' }).success, false)
   assert.equal(checkoutSchema.safeParse({ ...baseCheckout, price: '0.01' }).success, false)
 })
 
@@ -30,16 +32,35 @@ test('accepts a complete Sour Lemon delivery snapshot', () => {
     fulfillmentType: 'sour_lemon_delivery',
     paymentMethod: 'momo',
     paymentName: 'Akosua Mensah',
-    deliveryAreaId: '9e18c661-3038-4cbe-ae79-ef250bc3bbdd',
+    deliveryAddress: {
+      recipientName: 'Ama Mensah',
+      phoneNumber: '0244000000',
+      area: 'East Legon',
+      addressLine1: '1 Lemon Street',
+      city: 'Accra',
+      digitalAddress: 'GA-183-8164',
+    },
+  })
+  assert.equal(parsed.success, true)
+  if (parsed.success) assert.equal(parsed.data.customerEmail, 'customer@example.com')
+  assert.equal(checkoutQuoteSchema.safeParse({ fulfillmentType: 'sour_lemon_delivery' }).success, true)
+})
+
+test('delivery needs a typed area or a legacy area ID', () => {
+  const delivery = {
+    ...baseCheckout,
+    fulfillmentType: 'sour_lemon_delivery',
+    paymentMethod: 'momo',
+    paymentName: 'Ama Mensah',
     deliveryAddress: {
       recipientName: 'Ama Mensah',
       phoneNumber: '0244000000',
       addressLine1: '1 Lemon Street',
       city: 'Accra',
     },
-  })
-  assert.equal(parsed.success, true)
-  if (parsed.success) assert.equal(parsed.data.customerEmail, 'customer@example.com')
+  }
+  assert.equal(checkoutSchema.safeParse(delivery).success, false)
+  assert.equal(checkoutSchema.safeParse({ ...delivery, deliveryAreaId: '9e18c661-3038-4cbe-ae79-ef250bc3bbdd' }).success, true)
 })
 
 test('requires the receipt name for online payments', () => {

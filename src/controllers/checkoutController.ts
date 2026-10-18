@@ -12,9 +12,9 @@ import { Payment } from '../models/Payment.js'
 import { Product } from '../models/Product.js'
 import { ProductImage } from '../models/ProductImage.js'
 import { User } from '../models/User.js'
-import { initializePaystackTransaction } from '../services/paystackService.js'
 import { getOrderReceipt, hashOrderAccessToken } from '../services/orderService.js'
 import { allocateOrderNumber } from '../services/orderNumberService.js'
+import { loadCheckoutAvailability, requireFulfillment, requirePayment } from '../services/checkoutAvailability.js'
 import { publishOrderChanged } from '../services/orderEvents.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
@@ -89,33 +89,26 @@ const loadPricedCart = async (cartId: string, transaction?: Transaction) => {
   return { items, subtotalCents, currency: currency ?? 'GHS' }
 }
 
-const resolveFulfillment = async (
+export const resolveFulfillment = async (
   input: CheckoutQuoteInput,
   transaction?: Transaction,
 ) => {
-  const feeModeValue = await getSetting('delivery_fee_mode', transaction)
-  const deliveryFeeMode = feeModeValue === 'included' ? 'included' : 'rider'
-
   if (input.fulfillmentType !== 'sour_lemon_delivery') {
     if (input.deliveryAreaId) {
       throw new HttpError(400, 'This fulfillment option does not use a delivery area')
     }
-    return { deliveryArea: null, deliveryFeeCents: 0, deliveryFeeMode }
+    return { deliveryArea: null, deliveryFeeCents: 0, deliveryFeeMode: 'rider' as const }
   }
-  if (!input.deliveryAreaId) throw new HttpError(400, 'Choose a delivery area')
-  const deliveryArea = await DeliveryArea.findOne({
+  const deliveryArea = input.deliveryAreaId ? await DeliveryArea.findOne({
     where: { id: input.deliveryAreaId, isActive: true },
     transaction,
     ...(transaction ? { lock: transaction.LOCK.SHARE } : {}),
-  })
-  if (!deliveryArea) throw new HttpError(400, 'The selected delivery area is unavailable')
-  if (deliveryFeeMode === 'included' && deliveryArea.deliveryFee === null) {
-    throw new HttpError(409, 'The selected delivery area does not have a configured fee')
-  }
+  }) : null
+  if (input.deliveryAreaId && !deliveryArea) throw new HttpError(400, 'The selected delivery area is unavailable')
   return {
     deliveryArea,
-    deliveryFeeCents: deliveryFeeMode === 'included' ? toCents(deliveryArea.deliveryFee!) : 0,
-    deliveryFeeMode,
+    deliveryFeeCents: 0,
+    deliveryFeeMode: 'rider' as const,
   }
 }
 
@@ -123,6 +116,8 @@ export const quoteCheckout = asyncHandler(async (request, response) => {
   const cart = request.cartContext?.cart
   if (!cart) throw new HttpError(400, 'Your cart is empty')
   const input = request.validatedBody as CheckoutQuoteInput
+  const availability = await loadCheckoutAvailability()
+  requireFulfillment(availability, input.fulfillmentType)
   const [pricedCart, fulfillment] = await Promise.all([
     loadPricedCart(cart.id),
     resolveFulfillment(input),
@@ -154,6 +149,9 @@ export const createCheckout = asyncHandler(async (request, response) => {
 
   let guestAccessToken: string | null = null
   const result = await sequelize.transaction(async (transaction) => {
+    const availability = await loadCheckoutAvailability(transaction, true)
+    requireFulfillment(availability, input.fulfillmentType)
+    requirePayment(availability, input.fulfillmentType, input.paymentMethod)
     const cart = await Cart.findByPk(contextCart.id, { transaction, lock: transaction.LOCK.UPDATE })
     if (!cart || cart.status !== 'active') {
       throw new HttpError(409, 'This cart has already been checked out')
@@ -167,16 +165,10 @@ export const createCheckout = asyncHandler(async (request, response) => {
       if (!user) throw new HttpError(401, 'Authentication required')
       customerEmail = user.email
     }
-    if (input.paymentMethod !== 'cash' && !customerEmail) {
-      throw new HttpError(400, 'Add an email address before paying online')
-    }
-
     if (!request.auth) guestAccessToken = randomBytes(32).toString('base64url')
     const now = new Date()
     const isCash = input.paymentMethod === 'cash'
-    const requiresManualConfirmation = isCash || (
-      await getSetting('manual_payment_review', transaction)
-    ) === true
+    const requiresManualConfirmation = true
     const totalCents = pricedCart.subtotalCents + fulfillment.deliveryFeeCents
     const reservedOrderNumber = await allocateOrderNumber(transaction)
     const createdOrder = await Order.create({
@@ -192,7 +184,8 @@ export const createCheckout = asyncHandler(async (request, response) => {
       whatsappNumber: input.whatsappNumber ?? null,
       deliveryAddress: input.deliveryAddress ? {
         ...input.deliveryAddress,
-        deliveryAreaName: fulfillment.deliveryArea!.name,
+        area: input.deliveryAddress.area ?? fulfillment.deliveryArea?.name,
+        riderFeeSeparate: true,
       } : null,
       subtotal: fromCents(pricedCart.subtotalCents),
       deliveryFee: fromCents(fulfillment.deliveryFeeCents),
@@ -224,13 +217,13 @@ export const createCheckout = asyncHandler(async (request, response) => {
 
     const payment = await Payment.create({
       orderId: createdOrder.id,
-      provider: isCash ? 'cash' : 'paystack',
+      provider: isCash ? 'cash' : 'manual_momo',
       method: input.paymentMethod,
       paymentName: isCash ? null : input.paymentName!,
       status: isCash ? 'cash_due' : 'pending',
       amount: createdOrder.total,
       currency: createdOrder.currency,
-      providerReference: isCash ? null : `SLP-${randomBytes(12).toString('hex')}`,
+      providerReference: null,
       checkoutUrl: null,
       providerAccessCode: null,
       failureCode: null,
@@ -241,24 +234,6 @@ export const createCheckout = asyncHandler(async (request, response) => {
       adminConfirmedByUserId: null,
       providerData: null,
     }, { transaction })
-
-    if (!isCash) {
-      const initialized = await initializePaystackTransaction({
-        email: customerEmail!,
-        amountCents: totalCents,
-        currency: createdOrder.currency,
-        reference: payment.providerReference!,
-        method: input.paymentMethod as 'card' | 'momo',
-        paymentName: input.paymentName!,
-        orderId: createdOrder.id,
-        orderNumber: createdOrder.orderNumber,
-      })
-      await payment.update({
-        providerReference: initialized.reference,
-        checkoutUrl: initialized.checkoutUrl,
-        providerAccessCode: initialized.accessCode,
-      }, { transaction })
-    }
 
     await cart.update({ status: 'converted' }, { transaction })
     return { order: createdOrder, payment }

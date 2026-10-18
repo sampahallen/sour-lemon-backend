@@ -5,6 +5,8 @@ import { Order } from '../models/Order.js'
 import { OrderItem } from '../models/OrderItem.js'
 import { OrderStatusHistory } from '../models/OrderStatusHistory.js'
 import { Payment } from '../models/Payment.js'
+import { PaymentProof } from '../models/PaymentProof.js'
+import { proofResponse } from '../services/manualPaymentService.js'
 import { AppSetting } from '../models/AppSetting.js'
 import { getOrderReceipt, requireOrderAccess } from '../services/orderService.js'
 import { publishOrderChanged } from '../services/orderEvents.js'
@@ -75,6 +77,7 @@ const paymentSummary = (payment: Payment | null) => payment ? {
 const orderSummary = (order: Order, payment: Payment | null = null) => {
   const raw = order.toJSON() as unknown as Record<string, unknown>
   const area = raw.deliveryArea as Record<string, unknown> | null | undefined
+  const deliveryAreaName = order.deliveryAddress?.area ?? order.deliveryAddress?.deliveryAreaName ?? (area ? String(area.name) : null)
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -87,7 +90,7 @@ const orderSummary = (order: Order, payment: Payment | null = null) => {
     phoneNumber: order.phoneNumber,
     whatsappNumber: order.whatsappNumber,
     deliveryAreaId: order.deliveryAreaId,
-    deliveryAreaName: area ? String(area.name) : null,
+    deliveryAreaName,
     total: order.total,
     currency: order.currency,
     placedAt: order.placedAt,
@@ -116,6 +119,9 @@ const adminOrderDetail = async (order: Order) => {
       createdAt: entry.createdAt,
     })),
     payment: paymentSummary(payment),
+    paymentProofs: payment?.provider === 'manual_momo'
+      ? (await PaymentProof.findAll({ where: { paymentId: payment.id }, order: [['createdAt', 'DESC']] })).map(proofResponse)
+      : [],
   }
 }
 
@@ -286,10 +292,10 @@ export const groupedOrders = asyncHandler(async (request, response) => {
   const summaries = await loadSummaries(orders)
   const groups = new Map<string, { deliveryArea: { id: string; name: string } | null; orders: typeof summaries }>()
   for (const summary of summaries) {
-    const key = summary.deliveryAreaId ?? 'unassigned'
+    const key = summary.deliveryAreaName?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? 'unassigned'
     if (!groups.has(key)) groups.set(key, {
-      deliveryArea: summary.deliveryAreaId
-        ? { id: summary.deliveryAreaId, name: summary.deliveryAreaName ?? 'Delivery area' }
+      deliveryArea: summary.deliveryAreaName
+        ? { id: summary.deliveryAreaId ?? key, name: summary.deliveryAreaName }
         : null,
       orders: [],
     })
