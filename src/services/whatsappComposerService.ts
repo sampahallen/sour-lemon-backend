@@ -90,13 +90,14 @@ export const buildCustomCakeWhatsAppOptions = (input: Contact & {
   occasion: string
   quotedAmount: string | null
   currency: string
+  paymentUrl?: string | null
 }): WhatsAppOptions => {
   const greeting = `Hi ${input.customerName}!`
   const templates = [
     template('received', 'Request received', `${greeting} We’ve received your Sour Lemon custom cake request for ${input.occasion}. We’ll review the details and get back to you soon.`),
     template('details_needed', 'Ask for details', `${greeting} We’re reviewing your custom cake request for ${input.occasion} and need a little more information before we can confirm the design. `),
     ...(input.quotedAmount
-      ? [template('quote_ready', 'Quote ready', `${greeting} Your custom cake quote is ${input.currency} ${input.quotedAmount}. Reply here if you’d like to confirm or discuss any details.`)]
+      ? [template('quote_ready', 'Quote ready', `${greeting} Your custom cake quote is ${input.currency} ${input.quotedAmount}.${input.paymentUrl ? ` Pay by Mobile Money and submit your reference or screenshot here: ${input.paymentUrl}` : ' Reply here if you would like to discuss any details.'}`)]
       : []),
     template('confirmed', 'Cake confirmed', `${greeting} Your Sour Lemon custom cake for ${input.occasion} is confirmed. We’re excited to make it for you!`),
     template('unable_to_fulfil', 'Unable to fulfil', `${greeting} Thank you for your custom cake request. Unfortunately, we’re unable to take it on this time. We’re sorry we can’t make this one for you.`),

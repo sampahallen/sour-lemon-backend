@@ -62,6 +62,14 @@ describe('order workflow', () => {
     ), ['preparing', 'cancelled'])
   })
 
+  it('holds manual Mobile Money orders until owner verification', () => {
+    const order = { status: 'received' as const, fulfillmentType: 'sour_lemon_delivery' as const }
+    const payment = { provider: 'manual_momo' as const, status: 'pending' as const, requiresManualConfirmation: true, adminConfirmedAt: null as Date | null }
+    assert.deepEqual(getAllowedOrderTransitions(order, payment), ['cancelled'])
+    assert.equal(paymentDisplayStatus(payment), 'waiting_for_payment')
+    assert.deepEqual(getAllowedOrderTransitions(order, { ...payment, status: 'paid' as const, adminConfirmedAt: new Date() }), ['preparing', 'cancelled'])
+  })
+
   it('routes preparation according to fulfillment type', () => {
     const payment = paystackPayment({ adminConfirmedAt: new Date() })
     assert.deepEqual(getAvailableOrderActions(

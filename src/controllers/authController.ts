@@ -405,6 +405,7 @@ const refreshFor = async (request: Request, response: Response, role: UserRole, 
   }
 
   const nextToken = createRefreshToken()
+  let mergedGuestCart = false
   await sequelize.transaction(async (transaction) => {
     const [rotated] = await AuthSession.update(
       {
@@ -424,12 +425,14 @@ const refreshFor = async (request: Request, response: Response, role: UserRole, 
     )
     if (rotated !== 1) throw new HttpError(409, 'Refresh already in progress')
     await AuthRefreshUse.create({ tokenHash, sessionId: session.id, usedAt: now }, { transaction })
+    if (role === 'customer') mergedGuestCart = await mergeGuestCart(request, user.id, transaction)
   })
 
   session.lastActivityAt = now
   session.expiresAt = absoluteExpiry
   setRefreshCookie(response, role, nextToken, absoluteExpiry)
   if (legacy) clearLegacyRefreshCookie(response)
+  if (mergedGuestCart) clearGuestCartCookie(response)
   response.json(authenticationResponse(user, session))
 }
 

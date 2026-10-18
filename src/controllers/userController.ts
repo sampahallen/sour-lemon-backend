@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt'
 import { getBcryptRounds } from '../config/auth.js'
 import { sequelize } from '../config/database.js'
 import { Address } from '../models/Address.js'
+import { DeliveryArea } from '../models/DeliveryArea.js'
 import { AuthSession } from '../models/AuthSession.js'
 import { User } from '../models/User.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
@@ -45,11 +46,13 @@ export const getCurrentUser = asyncHandler(async (request, response) => {
   const defaultAddress = await Address.findOne({
     where: { userId: user.id, isDefault: true },
   })
+  const legacyArea = defaultAddress?.deliveryAreaId ? await DeliveryArea.findByPk(defaultAddress.deliveryAreaId) : null
   response.json({
     user: toUserResponse(user),
     defaultAddress: defaultAddress ? {
       id: defaultAddress.id,
       deliveryAreaId: defaultAddress.deliveryAreaId,
+      deliveryAreaName: legacyArea?.name ?? null,
       recipientName: defaultAddress.recipientName,
       phoneNumber: defaultAddress.phoneNumber,
       addressLine1: defaultAddress.addressLine1,

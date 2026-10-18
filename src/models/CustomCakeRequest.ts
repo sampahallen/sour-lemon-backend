@@ -30,6 +30,7 @@ export class CustomCakeRequest extends Model<
   declare quotedByUserId: ForeignKey<User['id']> | null
   declare quotedAt: Date | null
   declare quoteExpiresAt: Date | null
+  declare paymentLinkNonce: string | null
   declare isDeleted: CreationOptional<boolean>
   declare createdAt: CreationOptional<Date>
   declare updatedAt: CreationOptional<Date>
@@ -62,6 +63,7 @@ export const initCustomCakeRequest = (sequelize: Sequelize) => {
       quotedByUserId: { type: DataTypes.UUID, allowNull: true },
       quotedAt: { type: DataTypes.DATE, allowNull: true },
       quoteExpiresAt: { type: DataTypes.DATE, allowNull: true },
+      paymentLinkNonce: { type: DataTypes.STRING(64), allowNull: true },
       isDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       createdAt: DataTypes.DATE,
       updatedAt: DataTypes.DATE,
