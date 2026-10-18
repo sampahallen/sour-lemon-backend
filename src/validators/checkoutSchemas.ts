@@ -11,10 +11,12 @@ const fulfillmentType = z.enum(['pickup', 'customer_rider', 'sour_lemon_delivery
 const deliveryAddress = z.object({
   recipientName: z.string().trim().min(2).max(120),
   phoneNumber: e164Phone,
+  area: z.string().trim().min(2).max(120).optional(),
   addressLine1: z.string().trim().min(1).max(255),
   addressLine2: z.string().trim().min(1).max(255).optional(),
   city: z.string().trim().min(1).max(120),
   landmark: z.string().trim().min(1).max(255).optional(),
+  digitalAddress: z.string().trim().min(3).max(64).optional(),
 }).strict()
 
 export const checkoutQuoteSchema = z.object({
@@ -34,6 +36,9 @@ export const checkoutSchema = z.object({
   paymentName: z.string().trim().min(2).max(120).optional(),
   customerNotes: z.string().trim().max(2000).nullable().optional(),
 }).strict().superRefine((input, context) => {
+  if (input.fulfillmentType === 'sour_lemon_delivery' && input.deliveryAddress && !input.deliveryAddress.area && !input.deliveryAreaId) {
+    context.addIssue({ code: 'custom', path: ['deliveryAddress', 'area'], message: 'Enter your delivery area or neighbourhood' })
+  }
   if (input.paymentMethod !== 'cash' && !input.paymentName) {
     context.addIssue({
       code: 'custom',

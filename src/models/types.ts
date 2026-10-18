@@ -58,10 +58,13 @@ export type JournalImageRole = (typeof JOURNAL_IMAGE_ROLES)[number]
 export interface DeliveryAddressSnapshot {
   recipientName: string
   phoneNumber: string
+  area?: string
   addressLine1: string
   addressLine2?: string
   city: string
   landmark?: string
+  digitalAddress?: string
+  riderFeeSeparate?: boolean
   deliveryAreaName?: string
 }
 

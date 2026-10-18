@@ -7,9 +7,12 @@ test('accepts and normalizes every supported app setting', () => {
     updates: [
       { key: 'business_whatsapp_number', value: '020 123 4567' },
       { key: 'pickup_location', value: '  12 Volta Street, Osu  ' },
-      { key: 'manual_payment_review', value: true },
-      { key: 'delivery_fee_mode', value: 'included' },
       { key: 'menu_scheduling_enabled', value: false },
+      { key: 'checkout_pickup_enabled', value: true },
+      { key: 'checkout_customer_rider_enabled', value: true },
+      { key: 'checkout_delivery_enabled', value: true },
+      { key: 'checkout_momo_enabled', value: true },
+      { key: 'checkout_cash_enabled', value: true },
     ],
   })
 
@@ -35,11 +38,14 @@ test('rejects unknown, duplicate, and invalid app settings', () => {
   }).success, false)
   assert.equal(appSettingsUpdateSchema.safeParse({
     updates: [
-      { key: 'manual_payment_review', value: true },
-      { key: 'manual_payment_review', value: false },
+      { key: 'checkout_pickup_enabled', value: true },
+      { key: 'checkout_pickup_enabled', value: false },
     ],
   }).success, false)
   assert.equal(appSettingsUpdateSchema.safeParse({
-    updates: [{ key: 'delivery_fee_mode', value: 'free' }],
+    updates: [{ key: 'delivery_fee_mode', value: 'included' }],
+  }).success, false)
+  assert.equal(appSettingsUpdateSchema.safeParse({
+    updates: [{ key: 'checkout_cash_enabled', value: 'yes' }],
   }).success, false)
 })

@@ -4,12 +4,15 @@ import { normalizePhoneNumber } from '../utils/phoneNumber.js'
 export const APP_SETTING_KEYS = [
   'business_whatsapp_number',
   'pickup_location',
-  'manual_payment_review',
-  'delivery_fee_mode',
   'menu_scheduling_enabled',
   'momo_payment_number',
   'momo_recipient_name',
   'momo_network',
+  'checkout_pickup_enabled',
+  'checkout_customer_rider_enabled',
+  'checkout_delivery_enabled',
+  'checkout_momo_enabled',
+  'checkout_cash_enabled',
 ] as const
 
 const nullableWhatsappNumber = z.preprocess(
@@ -27,12 +30,15 @@ const nullablePickupLocation = z.preprocess(
 const appSettingUpdateSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('business_whatsapp_number'), value: nullableWhatsappNumber }).strict(),
   z.object({ key: z.literal('pickup_location'), value: nullablePickupLocation }).strict(),
-  z.object({ key: z.literal('manual_payment_review'), value: z.boolean() }).strict(),
-  z.object({ key: z.literal('delivery_fee_mode'), value: z.enum(['included', 'rider']) }).strict(),
   z.object({ key: z.literal('menu_scheduling_enabled'), value: z.boolean() }).strict(),
   z.object({ key: z.literal('momo_payment_number'), value: nullableWhatsappNumber }).strict(),
   z.object({ key: z.literal('momo_recipient_name'), value: z.string().trim().min(2).max(120).nullable() }).strict(),
   z.object({ key: z.literal('momo_network'), value: z.string().trim().min(2).max(80).nullable() }).strict(),
+  z.object({ key: z.literal('checkout_pickup_enabled'), value: z.boolean() }).strict(),
+  z.object({ key: z.literal('checkout_customer_rider_enabled'), value: z.boolean() }).strict(),
+  z.object({ key: z.literal('checkout_delivery_enabled'), value: z.boolean() }).strict(),
+  z.object({ key: z.literal('checkout_momo_enabled'), value: z.boolean() }).strict(),
+  z.object({ key: z.literal('checkout_cash_enabled'), value: z.boolean() }).strict(),
 ])
 
 export const appSettingsUpdateSchema = z.object({
