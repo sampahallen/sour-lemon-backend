@@ -47,3 +47,8 @@ test('admins retain access to account and guest orders', () => {
   assert.doesNotThrow(() => requireOrderAccess(requestFor('admin-one', 'admin'), orderFor(ownerId)))
   assert.doesNotThrow(() => requireOrderAccess(requestFor('admin-one', 'admin'), orderFor(null)))
 })
+
+test('the customer session of a dual-role admin only accesses its own orders', () => {
+  assert.doesNotThrow(() => requireOrderAccess(requestFor('admin-one', 'customer'), orderFor('admin-one')))
+  assert.throws(() => requireOrderAccess(requestFor('admin-one', 'customer'), orderFor(ownerId)), { status: 403 })
+})

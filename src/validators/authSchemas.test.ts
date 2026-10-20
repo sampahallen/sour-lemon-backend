@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { forgotPasswordSchema, resetPasswordSchema } from './authSchemas.js'
+import { forgotPasswordSchema, resetPasswordSchema, signUpSchema } from './authSchemas.js'
+
+test('public signup cannot request admin access', () => {
+  const customer = {
+    name: 'Lemon Lover', email: 'lemon@example.com', phoneNumber: '+233201234567',
+    password: 'long-enough', deliveryAddress: { addressLine1: '12 Main Road', city: 'Accra' },
+  }
+  assert.equal(signUpSchema.safeParse(customer).success, true)
+  assert.equal(signUpSchema.safeParse({ ...customer, roles: ['customer', 'admin'] }).success, false)
+  assert.equal(signUpSchema.safeParse({ ...customer, role: 'admin' }).success, false)
+})
 
 test('normalizes a Ghanaian phone number for password recovery', () => {
   assert.deepEqual(forgotPasswordSchema.parse({ phoneNumber: '020 123 4567' }), {

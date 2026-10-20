@@ -8,6 +8,7 @@ import {
   Sequelize,
 } from 'sequelize'
 import { User } from './User.js'
+import type { UserRole } from './types.js'
 
 export class AuthSession extends Model<
   InferAttributes<AuthSession>,
@@ -15,6 +16,7 @@ export class AuthSession extends Model<
 > {
   declare id: CreationOptional<string>
   declare userId: ForeignKey<User['id']>
+  declare role: UserRole | null
   declare refreshTokenHash: string
   declare expiresAt: Date
   declare lastActivityAt: Date
@@ -28,6 +30,7 @@ export const initAuthSession = (sequelize: Sequelize) => {
     {
       id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
       userId: { type: DataTypes.UUID, allowNull: false },
+      role: { type: DataTypes.STRING(20), allowNull: true, validate: { isIn: [['customer', 'admin']] } },
       refreshTokenHash: {
         type: DataTypes.STRING(255),
         allowNull: false,

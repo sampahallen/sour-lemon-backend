@@ -16,6 +16,7 @@ export class User extends Model<InferAttributes<User>, InferCreationAttributes<U
   declare passwordHash: string
   declare whatsappNumber: string | null
   declare role: CreationOptional<UserRole>
+  declare roles: CreationOptional<UserRole[]>
   declare isActive: CreationOptional<boolean>
   declare isDeleted: CreationOptional<boolean>
   declare createdAt: CreationOptional<Date>
@@ -36,6 +37,19 @@ export const initUser = (sequelize: Sequelize) => {
         allowNull: false,
         defaultValue: 'customer',
         validate: { isIn: [[...USER_ROLES]] },
+      },
+      roles: {
+        type: DataTypes.ARRAY(DataTypes.STRING(20)),
+        allowNull: false,
+        defaultValue: ['customer'],
+        validate: {
+          validRoles(value: UserRole[]) {
+            if (!Array.isArray(value) || value.length < 1 || value.length > 2 ||
+              value[0] !== 'customer' || (value.length === 2 && value[1] !== 'admin')) {
+              throw new Error('Roles must be customer or customer and admin')
+            }
+          },
+        },
       },
       isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
       isDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
