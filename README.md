@@ -119,9 +119,22 @@ starting the API. Phone numbers use E.164 format, such as `+233201234567`.
   addresses/sessions; the request body must contain `password`.
 - `GET /api/users?page=1&limit=25` - list users; restricted to administrators.
 
-Protected routes require `Authorization: Bearer <token>`. Sign-up never accepts
-an admin role; the initial administrator must be created through trusted seed or
-deployment tooling.
+Protected routes require `Authorization: Bearer <token>`. Apply
+`20261020000300-add-multiple-user-roles.cjs` before deploying the role-aware API.
+Sign-up always creates a customer; existing admins gain both customer and admin
+roles. One account can sign in to both apps with the same credentials. Each app
+gets a separate role-scoped session and refresh cookie, so a customer token
+cannot call admin endpoints. API user responses include `roles`. The existing
+`role` field reflects the active role in auth and `/api/users/me` responses;
+the admin user list retains its legacy primary-role value. The legacy
+`users.role` database column is retained during rollout.
+
+Admin access is changed only through trusted backend commands after building
+the backend and applying the migration: `npm run admin:grant -- --user-id <uuid>`
+or `npm run admin:revoke -- --user-id <uuid>`. Revocation ends that account's admin sessions
+but keeps its customer sessions. The last active admin cannot be revoked, and
+an account with admin access cannot delete itself from the storefront. Customer
+password reset uses the shared password and revokes all sessions in both apps.
 
 Password recovery requires `CUSTOMER_APP_URL`, `SMTP_HOST`, `SMTP_PORT`,
 `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. Reset links expire

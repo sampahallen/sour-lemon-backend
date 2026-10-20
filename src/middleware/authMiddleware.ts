@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { getJwtSecret, getSessionAbsoluteMs, getSessionIdleMs } from '../config/auth.js'
 import { AuthSession } from '../models/AuthSession.js'
 import { isSessionActive } from '../services/authSessionPolicy.js'
+import { hasActiveRole } from '../services/roleAccess.js'
 import { User } from '../models/User.js'
 import { USER_ROLES, type UserRole } from '../models/types.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
@@ -26,21 +27,21 @@ export const verifyAccessToken = async (token: string): Promise<{ userId: string
   }
 
   if (typeof payload.sid !== 'string' && process.env.ALLOW_LEGACY_ACCESS_TOKENS === 'true') {
-    const legacyUser = await User.findOne({ where: { id: payload.sub, role: payload.role, isActive: true, isDeleted: false } })
-    if (legacyUser) return { userId: legacyUser.id, role: legacyUser.role, sessionId: 'legacy' }
+    const legacyUser = await User.findOne({ where: { id: payload.sub, isActive: true, isDeleted: false } })
+    if (legacyUser?.roles.includes(payload.role)) return { userId: legacyUser.id, role: payload.role, sessionId: 'legacy' }
   }
   if (typeof payload.sid !== 'string') throw new HttpError(401, 'Invalid or expired token')
 
   const [user, session] = await Promise.all([
-    User.findOne({ where: { id: payload.sub, isActive: true, isDeleted: false }, attributes: ['id', 'role'] }),
+    User.findOne({ where: { id: payload.sub, isActive: true, isDeleted: false }, attributes: ['id', 'role', 'roles'] }),
     AuthSession.findOne({ where: { id: payload.sid, userId: payload.sub, revokedAt: null } }),
   ])
   const now = new Date()
-  if (!user || !session || user.role !== payload.role ||
-    !isSessionActive(session, getSessionAbsoluteMs(user.role), getSessionIdleMs(user.role), now)) {
+  if (!user || !session || !hasActiveRole(user.roles, user.role, session.role, payload.role) ||
+    !isSessionActive(session, getSessionAbsoluteMs(payload.role), getSessionIdleMs(payload.role), now)) {
     throw new HttpError(401, 'Invalid or expired token')
   }
-  return { userId: user.id, role: user.role, sessionId: session.id }
+  return { userId: user.id, role: payload.role, sessionId: session.id }
 }
 
 export const authenticate: RequestHandler = asyncHandler(async (request, _response, next) => {

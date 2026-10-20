@@ -8,19 +8,21 @@ export interface UserResponse {
   phoneNumber: string
   whatsappNumber: string | null
   role: UserRole
+  roles: UserRole[]
   isActive: boolean
   isDeleted: boolean
   createdAt: Date
   updatedAt: Date
 }
 
-export const toUserResponse = (user: User): UserResponse => ({
+export const toUserResponse = (user: User, activeRole: UserRole = user.role): UserResponse => ({
   id: user.id,
   name: user.name,
   email: user.email,
   phoneNumber: user.phoneNumber,
   whatsappNumber: user.whatsappNumber,
-  role: user.role,
+  role: activeRole,
+  roles: user.roles,
   isActive: user.isActive,
   isDeleted: user.isDeleted,
   createdAt: user.createdAt,

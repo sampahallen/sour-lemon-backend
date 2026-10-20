@@ -5,6 +5,7 @@ import { Address } from '../models/Address.js'
 import { DeliveryArea } from '../models/DeliveryArea.js'
 import { AuthSession } from '../models/AuthSession.js'
 import { User } from '../models/User.js'
+import { canDeleteOwnAccount } from '../services/roleAccess.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 import { toUserResponse } from '../utils/userResponse.js'
@@ -38,7 +39,7 @@ export const updateCurrentUser = asyncHandler(async (request, response) => {
   if (input.whatsappNumber !== undefined) user.whatsappNumber = input.whatsappNumber
 
   await user.save()
-  response.json({ user: toUserResponse(user) })
+  response.json({ user: toUserResponse(user, request.auth!.role) })
 })
 
 export const getCurrentUser = asyncHandler(async (request, response) => {
@@ -48,7 +49,7 @@ export const getCurrentUser = asyncHandler(async (request, response) => {
   })
   const legacyArea = defaultAddress?.deliveryAreaId ? await DeliveryArea.findByPk(defaultAddress.deliveryAreaId) : null
   response.json({
-    user: toUserResponse(user),
+    user: toUserResponse(user, request.auth!.role),
     defaultAddress: defaultAddress ? {
       id: defaultAddress.id,
       deliveryAreaId: defaultAddress.deliveryAreaId,
@@ -70,6 +71,9 @@ export const deleteCurrentUser = asyncHandler(async (request, response) => {
   if (!(await bcrypt.compare(input.password, user.passwordHash))) {
     throw new HttpError(400, 'Password is incorrect')
   }
+  if (!canDeleteOwnAccount(user.roles)) {
+    throw new HttpError(409, 'Remove admin access through trusted tooling before deleting this account')
+  }
 
   await sequelize.transaction(async (transaction) => {
     await Address.update({ isDeleted: true }, { where: { userId: user.id }, transaction })
@@ -90,7 +94,7 @@ export const getAllUsers = asyncHandler(async (request, response) => {
   })
 
   response.json({
-    users: rows.map(toUserResponse),
+    users: rows.map((user) => toUserResponse(user)),
     pagination: {
       page,
       limit,

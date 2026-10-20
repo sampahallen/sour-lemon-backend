@@ -27,6 +27,7 @@ import { PasswordResetToken } from '../models/PasswordResetToken.js'
 import { getPasswordResetTokenTtlMinutes } from '../config/email.js'
 import { sendPasswordResetEmail } from '../services/passwordResetEmailService.js'
 import { isConcurrentRefreshUse, sessionDeadlines } from '../services/authSessionPolicy.js'
+import { hasActiveRole } from '../services/roleAccess.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 import { toUserResponse } from '../utils/userResponse.js'
@@ -37,8 +38,10 @@ import {
   SignUpInput,
 } from '../validators/authSchemas.js'
 
+const sessionRole = (user: User, session: AuthSession) => session.role ?? user.role
+
 const createToken = (user: User, session: AuthSession) =>
-  jwt.sign({ role: user.role, sid: session.id }, getJwtSecret(), {
+  jwt.sign({ role: sessionRole(user, session), sid: session.id }, getJwtSecret(), {
     subject: user.id,
     expiresIn: getJwtExpiresIn(),
   })
@@ -48,13 +51,13 @@ const authenticationResponse = (user: User, session: AuthSession) => {
   const payload = jwt.decode(token)
   if (!payload || typeof payload === 'string' || typeof payload.exp !== 'number') throw new Error('Could not issue access token')
   return {
-    user: toUserResponse(user),
+    user: toUserResponse(user, sessionRole(user, session)),
     token,
     tokenType: 'Bearer' as const,
     expiresIn: getJwtExpiresIn(),
     accessExpiresAt: new Date(payload.exp * 1000).toISOString(),
     sessionExpiresAt: session.expiresAt.toISOString(),
-    idleExpiresAt: new Date(session.lastActivityAt.getTime() + getSessionIdleMs(user.role)).toISOString(),
+    idleExpiresAt: new Date(session.lastActivityAt.getTime() + getSessionIdleMs(sessionRole(user, session))).toISOString(),
   }
 }
 
@@ -105,6 +108,13 @@ const assertAppOrigin = (request: Request, role: UserRole) => {
   if (request.get('origin') !== getAppOrigin(role)) throw new HttpError(403, 'Unrecognized app origin')
 }
 
+const roleForAppOrigin = (request: Request): UserRole => {
+  const origin = request.get('origin')
+  if (origin === getAppOrigin('admin')) return 'admin'
+  if (origin === getAppOrigin('customer')) return 'customer'
+  throw new HttpError(403, 'Unrecognized app origin')
+}
+
 const clearGuestCartCookie = (response: Response) => {
   response.clearCookie(getGuestCartCookieName(), guestCartCookieOptions)
 }
@@ -123,13 +133,14 @@ const readCookie = (request: Request, name: string) => {
   }
 }
 
-const issueRefreshSession = async (user: User, transaction: Transaction) => {
+const issueRefreshSession = async (user: User, role: UserRole, transaction: Transaction) => {
   const token = createRefreshToken()
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + getSessionAbsoluteMs(user.role))
+  const expiresAt = new Date(now.getTime() + getSessionAbsoluteMs(role))
   const session = await AuthSession.create(
     {
       userId: user.id,
+      role,
       refreshTokenHash: hashRefreshToken(token),
       expiresAt,
       lastActivityAt: now,
@@ -219,6 +230,7 @@ export const signUp = asyncHandler(async (request, response) => {
         passwordHash,
         whatsappNumber: input.whatsappNumber ?? null,
         role: 'customer',
+        roles: ['customer'],
       },
       { transaction },
     )
@@ -240,7 +252,7 @@ export const signUp = asyncHandler(async (request, response) => {
     )
 
     const mergedGuestCart = await mergeGuestCart(request, createdUser.id, transaction)
-    const refreshSession = await issueRefreshSession(createdUser, transaction)
+    const refreshSession = await issueRefreshSession(createdUser, 'customer', transaction)
     return { user: createdUser, mergedGuestCart, refreshSession }
   })
 
@@ -258,13 +270,14 @@ export const signIn = asyncHandler(async (request, response) => {
   if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) {
     throw new HttpError(401, 'Invalid phone number or password')
   }
-  assertAppOrigin(request, user.role)
+  const role = roleForAppOrigin(request)
+  if (!user.roles.includes(role)) throw new HttpError(403, 'This account does not have access to this app')
 
   const { refreshSession, mergedGuestCart } = await sequelize.transaction(async (transaction) => ({
-    refreshSession: await issueRefreshSession(user, transaction),
-    mergedGuestCart: await mergeGuestCart(request, user.id, transaction),
+    refreshSession: await issueRefreshSession(user, role, transaction),
+    mergedGuestCart: role === 'customer' ? await mergeGuestCart(request, user.id, transaction) : false,
   }))
-  setRefreshCookie(response, user.role, refreshSession.token, refreshSession.session.expiresAt)
+  setRefreshCookie(response, role, refreshSession.token, refreshSession.session.expiresAt)
   if (mergedGuestCart) clearGuestCartCookie(response)
   response.json(authenticationResponse(user, refreshSession.session))
 })
@@ -274,13 +287,12 @@ export const forgotPassword = asyncHandler(async (request, response) => {
   const user = await User.findOne({
     where: {
       phoneNumber: input.phoneNumber,
-      role: 'customer',
       isActive: true,
       isDeleted: false,
     },
   })
 
-  if (!user?.email) {
+  if (!user?.email || !user.roles.includes('customer')) {
     response.status(202).json({ message: forgotPasswordMessage })
     return
   }
@@ -338,14 +350,13 @@ export const resetPassword = asyncHandler(async (request, response) => {
     const user = await User.findOne({
       where: {
         id: resetToken.userId,
-        role: 'customer',
         isActive: true,
         isDeleted: false,
       },
       transaction,
       lock: transaction.LOCK.UPDATE,
     })
-    if (!user) {
+    if (!user || !user.roles.includes('customer')) {
       throw new HttpError(400, 'This reset link is invalid or has expired')
     }
 
@@ -383,7 +394,7 @@ const refreshFor = async (request: Request, response: Response, role: UserRole, 
     const used = consumed ? await AuthSession.findOne({ where: { id: consumed.sessionId, revokedAt: null } }) : null
     if (used) {
       const usedOwner = await User.findByPk(used.userId)
-      if (usedOwner?.role !== role) throw new HttpError(401, 'Invalid or expired session')
+      if (!usedOwner || !hasActiveRole(usedOwner.roles, usedOwner.role, used.role, role)) throw new HttpError(401, 'Invalid or expired session')
       if (consumed && isConcurrentRefreshUse(consumed.usedAt, now)) {
         throw new HttpError(409, 'Refresh already in progress')
       }
@@ -396,7 +407,7 @@ const refreshFor = async (request: Request, response: Response, role: UserRole, 
     where: { id: session.userId, isActive: true, isDeleted: false },
   })
   const { absolute: absoluteExpiry, idle: idleExpiry } = sessionDeadlines(session, getSessionAbsoluteMs(role), getSessionIdleMs(role))
-  if (user && user.role !== role) throw new HttpError(401, 'Invalid or expired session')
+  if (user && !hasActiveRole(user.roles, user.role, session.role, role)) throw new HttpError(401, 'Invalid or expired session')
   if (!user || absoluteExpiry <= now || idleExpiry <= now) {
     await session.update({ revokedAt: now })
     if (legacy) clearLegacyRefreshCookie(response)
