@@ -16,6 +16,8 @@ import { publicSettingsRouter } from './routes/publicSettingsRoutes.js'
 import { siteSectionRouter } from './routes/siteSectionRoutes.js'
 import { userRouter } from './routes/userRoutes.js'
 import { noStore } from './middleware/cacheControl.js'
+import { newsletterRouter } from './routes/newsletterRoutes.js'
+import { operationsRouter } from './routes/operationsRoutes.js'
 
 export const app = express()
 
@@ -51,7 +53,9 @@ app.use('/api/categories', categoryRouter)
 app.use('/api/custom-cake-requests', customCakeRouter)
 app.use('/api/delivery-areas', deliveryAreaRouter)
 app.use('/api/journal', journalRouter)
+app.use('/api/newsletter', newsletterRouter)
 app.use('/api/orders', orderRouter)
+app.use('/api/operations', operationsRouter)
 app.use('/api/payments', paymentRouter)
 app.use('/api/products', productRouter)
 app.use('/api/settings/public', publicSettingsRouter)

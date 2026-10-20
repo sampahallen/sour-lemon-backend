@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer'
 
 const requiredSetting = (name: string) => {
   const value = process.env[name]?.trim()
-  if (!value) throw new Error(`${name} must be configured to send password reset emails`)
+  if (!value) throw new Error(`${name} must be configured to send email`)
   return value
 }
 

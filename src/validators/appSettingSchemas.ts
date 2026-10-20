@@ -13,6 +13,7 @@ export const APP_SETTING_KEYS = [
   'checkout_delivery_enabled',
   'checkout_momo_enabled',
   'checkout_cash_enabled',
+  'drop_notifications_enabled',
 ] as const
 
 const nullableWhatsappNumber = z.preprocess(
@@ -39,6 +40,7 @@ const appSettingUpdateSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('checkout_delivery_enabled'), value: z.boolean() }).strict(),
   z.object({ key: z.literal('checkout_momo_enabled'), value: z.boolean() }).strict(),
   z.object({ key: z.literal('checkout_cash_enabled'), value: z.boolean() }).strict(),
+  z.object({ key: z.literal('drop_notifications_enabled'), value: z.boolean() }).strict(),
 ])
 
 export const appSettingsUpdateSchema = z.object({

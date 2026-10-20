@@ -2,11 +2,12 @@ import { deleteCustomCakeImageObject, uploadCustomCakeImage } from '../config/st
 import { CustomCakeImage } from '../models/CustomCakeImage.js'
 import { CustomCakeRequest } from '../models/CustomCakeRequest.js'
 import { PaymentProof } from '../models/PaymentProof.js'
-import { cakePaymentUrl, proofResponse } from '../services/manualPaymentService.js'
+import { cakePaymentUrl, getMomoDetails, proofResponse } from '../services/manualPaymentService.js'
 import { randomBytes } from 'node:crypto'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 import { buildCustomCakeWhatsAppOptions } from '../services/whatsappComposerService.js'
+import { publishOperationChanged } from '../services/operationEvents.js'
 import type {
   CustomCakeQuery,
   CustomCakeQuoteInput,
@@ -78,6 +79,7 @@ export const createCustomCakeRequest = asyncHandler(async (request, response) =>
     quotedAt: null,
     quoteExpiresAt: null,
   })
+  publishOperationChanged({ area: 'cakes', id: customCakeRequest.id, reason: 'created' })
   response.status(201).json({ request: toCustomCakeRequestDetail(customCakeRequest, []) })
 })
 
@@ -90,6 +92,7 @@ export const uploadCustomCakeRequestImage = asyncHandler(async (request, respons
       url: uploaded.url,
       storageKey: uploaded.storageKey,
     })
+    publishOperationChanged({ area: 'cakes', id: customCakeRequest.id, reason: 'updated' })
     response.status(201).json({ image: toCustomCakeImageResponse(image) })
   } catch (error) {
     await deleteCustomCakeImageObject(uploaded.storageKey).catch(() => undefined)
@@ -135,6 +138,7 @@ export const quoteCustomCakeRequest = asyncHandler(async (request, response) => 
   customCakeRequest.quotedByUserId = request.auth!.userId
   customCakeRequest.quoteExpiresAt = input.quoteExpiresAt ?? null
   await customCakeRequest.save()
+  publishOperationChanged({ area: 'cakes', id: customCakeRequest.id, reason: 'updated' })
   response.json({ request: await customCakeRequestDetail(customCakeRequest) })
 })
 
@@ -144,6 +148,7 @@ export const rejectCustomCakeRequest = asyncHandler(async (request, response) =>
   customCakeRequest.status = 'rejected'
   if (note) customCakeRequest.notes = `${customCakeRequest.notes ?? ''}\n\n[Rejected] ${note}`
   await customCakeRequest.save()
+  publishOperationChanged({ area: 'cakes', id: customCakeRequest.id, reason: 'updated' })
   response.json({ request: await customCakeRequestDetail(customCakeRequest) })
 })
 
@@ -151,11 +156,21 @@ export const cancelCustomCakeRequest = asyncHandler(async (request, response) =>
   const customCakeRequest = await requireCustomCakeRequest(request.params.id)
   customCakeRequest.status = 'cancelled'
   await customCakeRequest.save()
+  publishOperationChanged({ area: 'cakes', id: customCakeRequest.id, reason: 'updated' })
   response.json({ request: await customCakeRequestDetail(customCakeRequest) })
 })
 
 export const getCustomCakeWhatsAppOptions = asyncHandler(async (request, response) => {
   const customCakeRequest = await requireCustomCakeRequest(request.params.id)
+  let paymentUrl = cakePaymentUrl(customCakeRequest)
+  if (paymentUrl) {
+    try {
+      await getMomoDetails()
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 503) throw error
+      paymentUrl = null
+    }
+  }
   response.json(buildCustomCakeWhatsAppOptions({
     customerName: customCakeRequest.customerName,
     phoneNumber: customCakeRequest.phoneNumber,
@@ -164,6 +179,6 @@ export const getCustomCakeWhatsAppOptions = asyncHandler(async (request, respons
     occasion: customCakeRequest.occasion,
     quotedAmount: customCakeRequest.quotedAmount,
     currency: customCakeRequest.currency,
-    paymentUrl: cakePaymentUrl(customCakeRequest),
+    paymentUrl,
   }))
 })
