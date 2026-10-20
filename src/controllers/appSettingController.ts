@@ -4,6 +4,7 @@ import { AppSetting } from '../models/AppSetting.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 import { CHECKOUT_REQUIRED_KEYS, validateCheckoutSettings } from '../services/checkoutAvailability.js'
+import { assertDropSendingReady, skipVisibleDrops } from '../services/dropNotificationService.js'
 import {
   APP_SETTING_KEYS,
   type AppSettingsUpdateInput,
@@ -52,11 +53,24 @@ export const updateAppSettings = asyncHandler(async (request, response) => {
     const proposed = new Map<string, unknown>(existing.map((setting) => [setting.key, setting.value]))
     for (const update of updates) proposed.set(update.key, update.value)
     validateCheckoutSettings(proposed)
+    const notifyUpdate = updates.find((update) => update.key === 'drop_notifications_enabled')
+    if (notifyUpdate) {
+      await sequelize.query('SELECT pg_advisory_xact_lock(20261020, 2)', { transaction })
+      if (notifyUpdate.value === true && byKey.get('drop_notifications_enabled')?.value !== true) {
+        try { assertDropSendingReady() }
+        catch (error) { throw new HttpError(409, error instanceof Error ? error.message : 'Email sending is not configured') }
+        await skipVisibleDrops(transaction)
+      }
+    }
     for (const update of updates) {
       await byKey.get(update.key)!.update({
         value: update.value === null ? literal("'null'::jsonb") as never : update.value,
         updatedByUserId: request.auth!.userId,
       }, { transaction })
+    }
+    if (updates.some((update) => update.key === 'drop_notifications_enabled' && update.value === false)) {
+      await sequelize.query("UPDATE drop_sources SET status = 'skipped' WHERE status = 'pending'", { transaction })
+      await sequelize.query("UPDATE drop_deliveries SET status = 'suppressed', updated_at = NOW() WHERE status = 'queued'", { transaction })
     }
 
     return AppSetting.findAll({

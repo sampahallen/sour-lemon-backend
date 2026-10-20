@@ -10,6 +10,7 @@ import { getOrderReceipt, requireOrderAccess } from '../services/orderService.js
 import { cakePaymentUrl, getMomoDetails, proofResponse, requireCakePaymentLink } from '../services/manualPaymentService.js'
 import { deletePaymentProofImage, readPaymentProofImage, savePaymentProofImage } from '../services/paymentProofStorage.js'
 import { publishOrderChanged } from '../services/orderEvents.js'
+import { publishOperationChanged } from '../services/operationEvents.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
 
@@ -23,6 +24,15 @@ const referenceFromRequest = (request: Request) => {
 const latestOrderPayment = (orderId: string) => Payment.findOne({ where: { orderId }, order: [['createdAt', 'DESC']] })
 const proofsFor = (target: { paymentId?: string; customCakeRequestId?: string }) =>
   PaymentProof.findAll({ where: target, order: [['createdAt', 'DESC']] })
+
+const requireCakeMomoConfiguration = async () => {
+  try {
+    await getMomoDetails()
+  } catch (error) {
+    if (!(error instanceof HttpError) || error.status !== 503) throw error
+    throw new HttpError(409, 'Set the Mobile Money number, recipient name, and network in Settings before creating a payment link')
+  }
+}
 
 const createProof = async (target: { paymentId: string | null; customCakeRequestId: string | null }, request: Request) => {
   const reference = referenceFromRequest(request)
@@ -63,6 +73,7 @@ export const submitOrderProof = asyncHandler(async (request, response) => {
   await getMomoDetails()
   const proof = await createProof({ paymentId: payment.id, customCakeRequestId: null }, request)
   publishOrderChanged({ orderId: order.id, reason: 'payment_updated' })
+  publishOperationChanged({ area: 'proofs', id: proof.id, reason: 'created' })
   response.status(201).json({ proof: proofResponse(proof), order: await getOrderReceipt(order) })
 })
 
@@ -78,12 +89,23 @@ export const getCakePayment = asyncHandler(async (request, response) => {
   const cake = await CustomCakeRequest.findByPk(request.params.id)
   if (!cake) throw new HttpError(404, 'Payment link not found')
   requireCakePaymentLink(cake, request.params.token)
-  const payable = ['quoted', 'awaiting_payment'].includes(cake.status) && !!cake.quotedAmount &&
+  const quotePayable = ['quoted', 'awaiting_payment'].includes(cake.status) && !!cake.quotedAmount &&
     (!cake.quoteExpiresAt || cake.quoteExpiresAt > new Date())
+  let momo = null
+  let paymentConfigurationMissing = false
+  if (quotePayable) {
+    try {
+      momo = await getMomoDetails()
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 503) throw error
+      paymentConfigurationMissing = true
+    }
+  }
   response.json({
     cake: { id: cake.id, occasion: cake.occasion, quotedAmount: cake.quotedAmount, currency: cake.currency, status: cake.status, quoteExpiresAt: cake.quoteExpiresAt },
-    payable,
-    momo: payable ? await getMomoDetails() : null,
+    payable: quotePayable && !paymentConfigurationMissing,
+    paymentConfigurationMissing,
+    momo,
     proofs: (await proofsFor({ customCakeRequestId: cake.id })).map(proofResponse),
   })
 })
@@ -96,6 +118,8 @@ export const submitCakeProof = asyncHandler(async (request, response) => {
     (cake.quoteExpiresAt && cake.quoteExpiresAt <= new Date())) throw new HttpError(409, 'This quote is no longer payable')
   await getMomoDetails()
   const proof = await createProof({ paymentId: null, customCakeRequestId: cake.id }, request)
+  publishOperationChanged({ area: 'proofs', id: proof.id, reason: 'created' })
+  publishOperationChanged({ area: 'cakes', id: cake.id, reason: 'updated' })
   response.status(201).json({ proof: proofResponse(proof) })
 })
 
@@ -103,7 +127,11 @@ export const getCakePaymentLink = asyncHandler(async (request, response) => {
   const cake = await CustomCakeRequest.findByPk(request.params.id)
   if (!cake) throw new HttpError(404, 'Custom cake request not found')
   if (!cake.quotedAmount || !['quoted', 'awaiting_payment'].includes(cake.status)) throw new HttpError(409, 'Quote the cake first')
-  if (!cake.paymentLinkNonce) await cake.update({ paymentLinkNonce: randomBytes(32).toString('hex') })
+  await requireCakeMomoConfiguration()
+  if (!cake.paymentLinkNonce) {
+    await cake.update({ paymentLinkNonce: randomBytes(32).toString('hex') })
+    publishOperationChanged({ area: 'cakes', id: cake.id, reason: 'updated' })
+  }
   response.json({ url: cakePaymentUrl(cake) })
 })
 
@@ -111,15 +139,25 @@ export const revokeCakePaymentLink = asyncHandler(async (request, response) => {
   const cake = await CustomCakeRequest.findByPk(request.params.id)
   if (!cake) throw new HttpError(404, 'Custom cake request not found')
   if (!['quoted', 'awaiting_payment'].includes(cake.status)) throw new HttpError(409, 'Payment link cannot be changed')
+  await requireCakeMomoConfiguration()
   await cake.update({ paymentLinkNonce: randomBytes(32).toString('hex') })
+  publishOperationChanged({ area: 'cakes', id: cake.id, reason: 'updated' })
   response.json({ url: cakePaymentUrl(cake) })
 })
 
-export const getAdminProofs = asyncHandler(async (_request, response) => {
-  const proofs = await PaymentProof.findAll({ where: { status: 'submitted' }, order: [['createdAt', 'ASC']], limit: 100 })
+export const getAdminProofs = asyncHandler(async (request, response) => {
+  const page = Number(request.query.page ?? 1)
+  if (!Number.isInteger(page) || page < 1) throw new HttpError(400, 'Invalid page')
+  const limit = 25
+  const { count, rows: proofs } = await PaymentProof.findAndCountAll({
+    where: { status: 'submitted' }, order: [['createdAt', 'ASC']], limit, offset: (page - 1) * limit,
+  })
   const payments = await Payment.findAll({ where: { id: proofs.map((proof) => proof.paymentId).filter((id): id is string => !!id) } })
   const orderByPayment = new Map(payments.map((payment) => [payment.id, payment.orderId]))
-  response.json({ proofs: proofs.map((proof) => ({ ...proofResponse(proof), orderId: proof.paymentId ? orderByPayment.get(proof.paymentId) ?? null : null, customCakeRequestId: proof.customCakeRequestId })) })
+  response.json({
+    proofs: proofs.map((proof) => ({ ...proofResponse(proof), orderId: proof.paymentId ? orderByPayment.get(proof.paymentId) ?? null : null, customCakeRequestId: proof.customCakeRequestId })),
+    pagination: { page, limit, total: count, totalPages: Math.ceil(count / limit) },
+  })
 })
 
 export const getProofImage = asyncHandler(async (request, response) => {
@@ -155,7 +193,6 @@ export const reviewProof = asyncHandler(async (request, response) => {
         const now = new Date()
         await order.update({ status: 'paid', paidAt: now, adminConfirmedAt: now, adminConfirmedByUserId: request.auth!.userId }, { transaction })
         await lockedOrder.update({ paymentStatus: 'paid' }, { transaction })
-        transaction.afterCommit(() => publishOrderChanged({ orderId: lockedOrder.id, reason: 'payment_confirmed' }))
       }
     }
     if (cake) {
@@ -163,6 +200,11 @@ export const reviewProof = asyncHandler(async (request, response) => {
       if (decision === 'confirm') await cake.update({ status: 'confirmed' }, { transaction })
     }
     await locked.update({ status: decision === 'confirm' ? 'confirmed' : 'rejected', rejectionReason: decision === 'reject' ? reason : null, reviewedByUserId: request.auth!.userId, reviewedAt: new Date() }, { transaction })
+    transaction.afterCommit(() => {
+      publishOperationChanged({ area: 'proofs', id: locked.id, reason: 'reviewed' })
+      if (lockedOrder) publishOrderChanged({ orderId: lockedOrder.id, reason: decision === 'confirm' ? 'payment_confirmed' : 'payment_updated' })
+      if (cake) publishOperationChanged({ area: 'cakes', id: cake.id, reason: 'updated' })
+    })
     return locked
   }).catch((error: unknown) => {
     if (error instanceof UniqueConstraintError) throw new HttpError(409, 'This reference was already confirmed for another payment')

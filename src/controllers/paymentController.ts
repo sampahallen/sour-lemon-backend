@@ -14,6 +14,7 @@ import {
 import { getOrderReceipt, requireOrderAccess } from '../services/orderService.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/HttpError.js'
+import { publishOrderChanged } from '../services/orderEvents.js'
 
 const requirePaymentAccess = async (request: Parameters<RequestHandler>[0], paymentId: string) => {
   const payment = await Payment.findByPk(paymentId)
@@ -94,6 +95,7 @@ export const resumeOrRetryPayment = asyncHandler(async (request, response) => {
     await lockedOrder.update({ paymentStatus: 'pending' }, { transaction })
     return created
   })
+  publishOrderChanged({ orderId: order.id, reason: 'payment_updated' })
   response.status(201).json({
     payment: { id: payment.id, status: payment.status, accessCode: payment.providerAccessCode },
   })
