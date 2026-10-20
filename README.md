@@ -154,3 +154,30 @@ Journal uploads accept JPEG, PNG, and WebP images up to
 `AWS_S3_PUBLIC_BASE_URL`. The application uses the AWS SDK credential provider
 chain; do not commit access keys. Keep the bucket private and use a CloudFront
 distribution or equivalent public CDN URL for customer-facing images.
+
+## Subscriber drop alerts
+
+Apply `20261020000100-create-newsletter.cjs` and
+`20261020000200-create-drop-notifications.cjs` before enabling signup or alerts.
+The footer uses SMTP to confirm each subscriber's address; accounts are never
+imported automatically. Existing published content is marked as seen by the
+migration. The admin **Subscribers** page shows the audience and suppression
+controls. **Notify subscribers about new drops** in Settings defaults to off.
+
+With the switch on, the worker checks for newly public Bakery products and
+published Journal stories each minute. Products discovered within ten minutes
+are grouped into one email; Journal stories get individual emails. Turning the
+switch off suppresses queued mail, and re-enabling it skips content that went
+live while it was off. Historical campaign data is retained but campaign
+creation and manual sending are retired.
+
+Configure `SMTP_*`, `CUSTOMER_APP_URL`, `DROP_ALERT_TOKEN_SECRET` (at least 32
+characters), and `DROP_ALERT_API_URL` (public HTTPS API origin). The optional
+`DROP_ALERT_FROM` defaults to `SMTP_FROM`. The admin Notify switch is the only
+sending switch. Authenticate the sending domain with SPF, DKIM, and DMARC and
+set `DROP_ALERT_MAX_PER_MINUTE` below the provider limit. Run the worker on one
+API replica (`DROP_ALERT_WORKER_ENABLED=false` on other replicas). When moving
+from the old environment variables, copy the existing token secret unchanged
+so previously sent unsubscribe links continue to work. Legacy variable names
+remain accepted during migration. SMTP-accepted mail is recorded as accepted;
+ambiguous sends are held for review, not retried.

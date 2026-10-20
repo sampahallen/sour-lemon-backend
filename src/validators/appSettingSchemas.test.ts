@@ -13,6 +13,7 @@ test('accepts and normalizes every supported app setting', () => {
       { key: 'checkout_delivery_enabled', value: true },
       { key: 'checkout_momo_enabled', value: true },
       { key: 'checkout_cash_enabled', value: true },
+      { key: 'drop_notifications_enabled', value: false },
     ],
   })
 
@@ -47,5 +48,8 @@ test('rejects unknown, duplicate, and invalid app settings', () => {
   }).success, false)
   assert.equal(appSettingsUpdateSchema.safeParse({
     updates: [{ key: 'checkout_cash_enabled', value: 'yes' }],
+  }).success, false)
+  assert.equal(appSettingsUpdateSchema.safeParse({
+    updates: [{ key: 'drop_notifications_enabled', value: 'true' }],
   }).success, false)
 })

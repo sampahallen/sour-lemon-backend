@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { mock } from 'node:test'
 import type { CustomCakeRequest } from '../models/CustomCakeRequest.js'
-import { cakePaymentUrl, requireCakePaymentLink } from './manualPaymentService.js'
+import { AppSetting } from '../models/AppSetting.js'
+import { cakePaymentUrl, getMomoDetails, requireCakePaymentLink } from './manualPaymentService.js'
 
 test('cake payment links are unguessable and revoked when the nonce changes', () => {
   const previousSecret = process.env.JWT_SECRET
@@ -22,5 +23,18 @@ test('cake payment links are unguessable and revoked when the nonce changes', ()
     else process.env.JWT_SECRET = previousSecret
     if (previousOrigin === undefined) delete process.env.CUSTOMER_APP_ORIGIN
     else process.env.CUSTOMER_APP_ORIGIN = previousOrigin
+  }
+})
+
+test('custom cake payments require all Mobile Money details', async () => {
+  const findAll = mock.method(AppSetting, 'findAll', async () => [
+    { key: 'momo_payment_number', value: '+233201234567' },
+    { key: 'momo_recipient_name', value: 'Sour Lemon' },
+  ] as AppSetting[])
+  try {
+    await assert.rejects(getMomoDetails(), (error: unknown) =>
+      error instanceof Error && 'status' in error && error.status === 503)
+  } finally {
+    findAll.mock.restore()
   }
 })

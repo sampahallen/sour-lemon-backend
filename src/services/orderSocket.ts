@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { Server } from 'socket.io'
 import { verifyAccessToken } from '../middleware/authMiddleware.js'
 import { onOrderChanged } from './orderEvents.js'
+import { onOperationChanged } from './operationEvents.js'
 
 export const attachOrderSocket = (server: HttpServer, allowedOrigins: string[]) => {
   const io = new Server(server, {
@@ -38,6 +39,12 @@ export const attachOrderSocket = (server: HttpServer, allowedOrigins: string[]) 
   const unsubscribe = onOrderChanged((event) => {
     io.to('admins').emit('orders:changed', event)
   })
-  io.engine.on('close', unsubscribe)
+  const unsubscribeOperations = onOperationChanged((event) => {
+    io.to('admins').emit('operations:changed', event)
+  })
+  io.engine.on('close', () => {
+    unsubscribe()
+    unsubscribeOperations()
+  })
   return io
 }
