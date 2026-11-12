@@ -8,10 +8,10 @@ module.exports = {
           (id, key, name, is_enabled, show_coming_soon, sort_order, is_deleted, created_at, updated_at)
          VALUES
           (gen_random_uuid(), 'cakes', 'Cakes', true, false, 0, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-          (gen_random_uuid(), 'jams', 'Jams and syrups', false, true, 10, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-          (gen_random_uuid(), 'collaborations', 'Artist collaborations', false, true, 20, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-          (gen_random_uuid(), 'merch', 'Merch', false, true, 30, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-          (gen_random_uuid(), 'games', 'Games', false, true, 40, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          (gen_random_uuid(), 'jams', 'Jams and syrups', true, true, 10, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+          (gen_random_uuid(), 'collaborations', 'Artist collaborations', true, true, 20, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+          (gen_random_uuid(), 'merch', 'Merch', true, true, 30, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+          (gen_random_uuid(), 'games', 'Games', true, true, 40, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (key) DO NOTHING`,
         { transaction },
       )
