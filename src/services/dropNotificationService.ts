@@ -36,7 +36,7 @@ const tokenFor = (id: string) => {
   return `${id}.${createHmac('sha256', getDropTokenSecret()).update(id).digest('hex')}`
 }
 const publicProductCondition = `p.is_deleted = false AND p.archived_at IS NULL AND p.is_active = true
-  AND c.is_deleted = false AND c.is_active = true AND s.is_deleted = false AND s.is_enabled = true AND s.key = 'cakes'
+  AND c.is_deleted = false AND c.is_active = true AND s.is_deleted = false AND s.is_enabled = true AND s.show_coming_soon = false AND s.key = 'cakes'
   AND (COALESCE((SELECT value FROM app_settings WHERE key = 'menu_scheduling_enabled'), 'false'::jsonb) <> 'true'::jsonb
     OR ((p.available_from IS NULL OR p.available_from <= NOW()) AND (p.available_until IS NULL OR p.available_until > NOW())))`
 
