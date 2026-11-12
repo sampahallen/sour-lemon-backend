@@ -90,7 +90,7 @@ remain unsettled; new checkouts do not create Paystack transactions.
 Generate future migration skeletons with:
 
 ```bash
-npm exec sequelize-cli -- migration:generate --name describe-the-change
+npm exec sequelize-cli -- --options-path .sequelizerc.cjs migration:generate --name describe-the-change
 ```
 
 Always edit and review the generated `up` and `down` functions. Never use
