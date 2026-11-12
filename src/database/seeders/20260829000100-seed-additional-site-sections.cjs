@@ -6,10 +6,10 @@ module.exports = {
       `INSERT INTO site_sections
         (id, key, name, is_enabled, show_coming_soon, sort_order, is_deleted, created_at, updated_at)
        VALUES
-        (gen_random_uuid(), 'shop', 'Shop', false, true, 5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (gen_random_uuid(), 'shop', 'Shop', true, true, 5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
         (gen_random_uuid(), 'journal', 'Journal', true, false, 50, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-        (gen_random_uuid(), 'about', 'About', false, true, 60, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-        (gen_random_uuid(), 'contact', 'Contact', false, true, 70, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        (gen_random_uuid(), 'about', 'About', true, true, 60, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+        (gen_random_uuid(), 'contact', 'Contact', true, true, 70, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (key) DO NOTHING`,
     )
   },
